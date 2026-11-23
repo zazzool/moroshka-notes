@@ -16,6 +16,8 @@ services:
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:?}
+      NO_PROXY: app,localhost,127.0.0.1
+      no_proxy: app,localhost,127.0.0.1
     ports:
       - "80:80"
       - "443:443"
