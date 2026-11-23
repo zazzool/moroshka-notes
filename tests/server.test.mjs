@@ -21,7 +21,7 @@ async function fixture(t) {
   const api = (path, method='GET', data, key=token) => fetch(origin + path, {
     method,headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:data && JSON.stringify(data)
   })
-  return {api,dir,actionsToken,outgoing}
+  return {api,dir,actionsToken,outgoing,origin}
 }
 test('Markdown round trip, conditional writes, concurrent update and retry',async t => {
   const {api,dir} = await fixture(t); const id = randomUUID(); const path='/api/notes/'+id
@@ -78,4 +78,33 @@ test('delete preserves server copy and rejects stale writes', async t => {
   const data = await (await api('/api/notes')).json()
   assert.deepEqual(data.notes,[])
   assert.deepEqual(data.deleted,[{id,revision:digest(text)}])
+})
+
+test('pairing requires owner approval and a secret held by the requesting browser', async t => {
+  const { api } = await fixture(t)
+  const start = await api('/pair/start','POST',{})
+  assert.equal(start.status,200)
+  const {code,secret} = await start.json()
+  assert.match(code,/^\d{8}$/)
+  const claim = {code,secret}
+  assert.deepEqual(await (await api('/pair/claim','POST',claim,'')).json(),{pending:true})
+  assert.equal((await api('/pair/approve','POST',{code},'wrong')).status,401)
+  assert.equal((await api('/pair/approve','POST',{code})).status,200)
+  assert.equal((await api('/pair/claim','POST',{code,secret:'0'.repeat(64)},'')).status,404)
+  const result = await (await api('/pair/claim','POST',claim,'')).json()
+  assert.ok(result.token)
+  assert.equal((await api('/pair/claim','POST',claim,'')).status,404)
+  assert.equal((await api('/pair/approve','POST',{code})).status,404)
+})
+
+test('pairing rejects cross-origin requests and supports cancellation', async t => {
+  const {api,origin} = await fixture(t)
+  const response = await fetch(origin+'/pair/start', {
+    method:'POST', headers:{Origin:'https://other.example','Content-Type':'application/json'}, body:'{}'
+  })
+  assert.equal(response.status,403)
+  const {code,secret} = await (await api('/pair/start','POST',{})).json()
+  assert.equal((await api('/pair/cancel','POST',{code,secret:'0'.repeat(64)},'')).status,404)
+  assert.equal((await api('/pair/cancel','POST',{code,secret},'')).status,200)
+  assert.equal((await api('/pair/approve','POST',{code})).status,404)
 })

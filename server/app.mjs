@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { timingSafeEqual, createHash } from 'node:crypto'
+import { timingSafeEqual, createHash, randomBytes, randomInt } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
@@ -32,6 +32,21 @@ export function application(options, request = fetch) {
   if (!token || token.length < 24) throw Error('Задайте MOROSHKA_TOKEN длиной от 24 символов')
   if (actionsToken && (actionsToken.length < 24 || token === actionsToken)) throw Error('Нужен отдельный ключ для ChatGPT Actions длиной от 24 символов')
   const vault = openVault(dir)
+  // Pairing requests are short-lived and live only in this process.
+  const pairing = new Map()
+  function cleanPairing() {
+    const now = Date.now()
+    for (const [code, item] of pairing) if (item.expires <= now) pairing.delete(code)
+  }
+  function sameOrigin(req) {
+    const origin = req.headers.origin
+    if (!origin) return true
+    try {
+      const actual = new URL(origin)
+      const expected = publicUrl ? new URL(publicUrl) : null
+      return expected ? actual.origin === expected.origin : actual.host === req.headers.host
+    } catch { return false }
+  }
   function requireKey(req, key) {
     if (!key || !timingSafeEqual(hash(req.headers.authorization || ''), hash('Bearer ' + key))) {
       throw new ApiError(401, 'Проверьте ключ подключения')
@@ -55,6 +70,42 @@ export function application(options, request = fetch) {
         const schema = JSON.parse(readFileSync(new URL('./actions.json', import.meta.url)))
         schema.servers = [{ url: publicUrl }]
         return json(res, 200, schema)
+      }
+      if (pathname.startsWith('/pair/')) {
+        if (req.method !== 'POST' || !sameOrigin(req) ||
+            !/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) {
+          throw new ApiError(403, 'Запрос отклонён')
+        }
+        cleanPairing()
+        if (pathname === '/pair/start') {
+          if (pairing.size >= 20) throw new ApiError(429, 'Слишком много запросов на подключение')
+          let code
+          do { code = String(randomInt(10000000, 100000000)) } while (pairing.has(code))
+          const secret = randomBytes(32).toString('hex')
+          pairing.set(code, { secret: hash(secret), expires: Date.now() + 120000, approved: false })
+          return json(res, 200, { code, secret, expiresIn: 120 })
+        }
+        if (pathname === '/pair/approve') {
+          requireKey(req, token)
+          const { code } = await payload(req)
+          if (typeof code !== 'string' || !/^\d{8}$/.test(code)) throw new ApiError(400, 'Введите восемь цифр')
+          const item = pairing.get(code)
+          if (!item || item.approved) throw new ApiError(404, 'Код не найден или уже использован')
+          item.approved = true
+          return json(res, 200, { approved: true })
+        }
+        if (pathname === '/pair/claim' || pathname === '/pair/cancel') {
+          const { code, secret } = await payload(req)
+          if (typeof code !== 'string' || typeof secret !== 'string' || !/^[0-9a-f]{64}$/.test(secret))
+            throw new ApiError(400, 'Неверный запрос')
+          const item = pairing.get(code)
+          if (!item || !timingSafeEqual(item.secret, hash(secret))) throw new ApiError(404, 'Код подключения истёк')
+          if (pathname === '/pair/cancel') { pairing.delete(code); return json(res, 200, { cancelled: true }) }
+          if (!item.approved) return json(res, 200, { pending: true })
+          pairing.delete(code)
+          return json(res, 200, { token })
+        }
+        throw new ApiError(404, 'Не найдено')
       }
       if (pathname.startsWith('/actions/')) {
         requireKey(req, actionsToken)

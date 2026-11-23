@@ -14,6 +14,14 @@
 <label for="body">Markdown</label><textarea id="body" spellcheck="true" placeholder="# Название заметки"></textarea>
 <div class="editorActions"><span id="saved" role="status"></span><button id="summary">Резюме в OpenRouter</button></div>
 <div id="related"></div></section></div>
-<dialog id="settings"><form method="dialog"><h2>Свой сервер</h2><p>Эта библиотека синхронизируется с сервером, на котором открыто приложение.</p><label for="key">Ключ синхронизации</label><input type="password" id="key" autocomplete="off"><div class="row"><button value="cancel">Отмена</button><button value="save" class="primary">Подключить</button></div></form></dialog>
+<dialog id="settings"><h2>Подключить устройство</h2>
+<p>На телефоне откройте «Подключить другое устройство» и введите этот код.</p>
+<div id="pair-code" class="pair-code" aria-live="polite">Получаем код…</div>
+<p id="pair-status" role="status">Код действует две минуты.</p>
+<button id="pair-retry" hidden>Получить новый код</button>
+<details><summary>Ввести ключ вручную</summary><form method="dialog">
+<label for="key">Ключ синхронизации</label><input type="password" id="key" autocomplete="off">
+<div class="row"><button value="save" class="primary">Подключить</button></div></form></details>
+<form method="dialog"><div class="row"><button value="cancel">Закрыть</button></div></form></dialog>
 <dialog id="message"><h2 id="msgTitle"></h2><p id="msgText"></p><form method="dialog"><button>Закрыть</button></form></dialog>
 </body></html>

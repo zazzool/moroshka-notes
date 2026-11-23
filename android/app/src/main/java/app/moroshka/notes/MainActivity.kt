@@ -216,11 +216,12 @@ class MainActivity : Activity() {
         changes(query) { search = query.text.toString(); refresh() }; refresh()
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Настроить сервер")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Настроить сервер")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
             else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
             else if (index == 2) deleteNotes()
+            else if (index == 3) pairDevice()
             else connection()
         }.show()
     }
@@ -379,6 +380,72 @@ class MainActivity : Activity() {
         }
         if (entries.isEmpty()) return notice("Добавьте [[Название]] для связи с другой заметкой.")
         AlertDialog.Builder(this).setTitle("Связи").setItems(entries.map { it.first }.toTypedArray()) { _, i -> safely(entries[i].second) }.show()
+    }
+    private fun pairDevice() {
+        val address = settings.getString("url", "").orEmpty()
+        val token = settings.getString("key", "").orEmpty()
+        if (address.isBlank() || token.isBlank()) {
+            notice("Сначала подключите этот телефон к своему серверу.")
+            return
+        }
+        val content = column().apply { setPadding(dp(20), 0, dp(20), 0) }
+        content.addView(label("Откройте на компьютере адрес:", 16f))
+        content.addView(label(address, 18f).apply { setTextIsSelectable(true); setPadding(0, dp(6), 0, dp(6)) })
+        content.addView(button("Поделиться адресом") {
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, address), "Адрес Moroshka Notes"))
+        })
+        content.addView(label("На компьютере нажмите «Подключение» и введите показанный код:", 16f))
+        val code = EditText(this).apply {
+            hint = "8 цифр"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(android.text.InputFilter.LengthFilter(8))
+            contentDescription = "Код с компьютера"
+        }
+        content.addView(code)
+        val dialog = AlertDialog.Builder(this).setTitle("Подключить компьютер").setView(content)
+            .setNegativeButton("Отмена", null).setPositiveButton("Подтвердить", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val value = code.text.toString()
+                if (!value.matches(Regex("[0-9]{8}"))) {
+                    code.error = "Введите 8 цифр"
+                    return@setOnClickListener
+                }
+                val confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                confirm.isEnabled = false
+                worker.execute {
+                    val result = runCatching {
+                        val conn = java.net.URL(address + "/pair/approve").openConnection() as javax.net.ssl.HttpsURLConnection
+                        try {
+                            conn.instanceFollowRedirects = false
+                            conn.connectTimeout = 12000
+                            conn.readTimeout = 15000
+                            conn.requestMethod = "POST"
+                            conn.doOutput = true
+                            conn.setRequestProperty("Authorization", "Bearer $token")
+                            conn.setRequestProperty("Content-Type", "application/json")
+                            conn.outputStream.use { it.write(org.json.JSONObject().put("code", value).toString().toByteArray(Charsets.UTF_8)) }
+                            when (conn.responseCode) {
+                                in 200..299 -> Unit
+                                401 -> error("Проверьте ключ сервера на этом телефоне.")
+                                404 -> error("Код не найден или истёк. Получите новый код на компьютере.")
+                                else -> error("Не удалось подключить устройство. Код ответа: ${conn.responseCode}")
+                            }
+                        } finally { conn.disconnect() }
+                    }
+                    runOnUiThread {
+                        if (isDestroyed) return@runOnUiThread
+                        confirm.isEnabled = true
+                        result.onSuccess {
+                            dialog.dismiss()
+                            Toast.makeText(this, "Компьютер подключён", Toast.LENGTH_LONG).show()
+                        }.onFailure { code.error = it.message ?: "Сервер недоступен" }
+                    }
+                }
+            }
+        }
+        dialog.show()
     }
     private fun connection() {
         val fields = column()

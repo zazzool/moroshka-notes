@@ -2,7 +2,9 @@ const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
 const notes = new Map()
 let selected, view = 'notes', dirtyEditor = false, busy = false
-let token = sessionStorage.getItem('moroshka.key') || ''
+let token = localStorage.getItem('moroshka.key') || sessionStorage.getItem('moroshka.key') || ''
+let pairingGeneration = 0
+let activePairing = null
 const title = n => n.text.match(/^#\s+(.+)$/m)?.[1].trim() || 'Без названия'
 const links = text => [...text.matchAll(/\[\[([^\]\n]+)\]\]/g)].map(m => m[1].trim())
 const norm = text => text.trim().toLocaleLowerCase()
@@ -101,8 +103,50 @@ async function api(path, method='GET', data) {
   if (!res.ok) throw Object.assign(Error(result.error || 'Ошибка сервера'),{status:res.status})
   return result
 }
+async function startPairing() {
+  const generation = ++pairingGeneration
+  $('pair-code').textContent = 'Получаем код…'
+  $('pair-status').textContent = 'Код действует две минуты.'
+  $('pair-retry').hidden = true
+  try {
+    const started = await api('/pair/start', 'POST', {})
+    if (generation !== pairingGeneration || !$('settings').open) {
+      api('/pair/cancel', 'POST', {code:started.code, secret:started.secret}).catch(() => {})
+      return
+    }
+    activePairing = started
+    if (generation !== pairingGeneration || !$('settings').open) return
+    $('pair-code').textContent = started.code.slice(0, 4) + ' ' + started.code.slice(4)
+    const expires = Date.now() + started.expiresIn * 1000
+    while (generation === pairingGeneration && $('settings').open && Date.now() < expires) {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      if (generation !== pairingGeneration || !$('settings').open) return
+      const result = await api('/pair/claim', 'POST', {code:started.code, secret:started.secret})
+      if (generation !== pairingGeneration || !$('settings').open) return
+      if (result.token) {
+        token = result.token
+        localStorage.setItem('moroshka.key', token)
+        sessionStorage.removeItem('moroshka.key')
+        $('settings').close('paired')
+        await sync()
+        return
+      }
+    }
+    if (generation !== pairingGeneration || !$('settings').open) return
+    $('pair-status').textContent = 'Код истёк.'
+  } catch (e) {
+    if (generation !== pairingGeneration || !$('settings').open) return
+    $('pair-status').textContent = e.message
+  }
+  $('pair-retry').hidden = false
+}
+function openSettings() {
+  $('key').value = token
+  $('settings').showModal()
+  startPairing()
+}
 async function sync() {
-  if (!token) { $('settings').showModal(); return }
+  if (!token) { openSettings(); return }
   if (busy) return
   persistEditor(); busy = true; document.querySelector('.shell').inert = true; $('status').textContent = 'Синхронизация…'
   let conflicts = 0
@@ -153,10 +197,17 @@ function start() {
     try { persistEditor(); render() } catch(e) { $('saved').textContent = e.message }
   }
   window.addEventListener('beforeunload', e => { if (dirtyEditor) {e.preventDefault(); e.returnValue = ''} })
-  $('connect').onclick = () => { $('key').value = token; $('settings').showModal() }
+  $('connect').onclick = openSettings
+  $('pair-retry').onclick = startPairing
   $('settings').addEventListener('close', () => {
+    pairingGeneration++
+    if (activePairing) {
+      const {code, secret} = activePairing
+      activePairing = null
+      api('/pair/cancel', 'POST', {code, secret}).catch(() => {})
+    }
     if ($('settings').returnValue !== 'save') return
-    token = $('key').value.trim(); sessionStorage.setItem('moroshka.key',token)
+    token = $('key').value.trim(); localStorage.setItem('moroshka.key',token); sessionStorage.removeItem('moroshka.key')
     if (token) sync(); else $('status').textContent = 'На этом устройстве'
   })
   $('sync').onclick = () => sync().catch(report)

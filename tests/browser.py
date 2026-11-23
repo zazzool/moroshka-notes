@@ -13,6 +13,7 @@ KEY = secrets.token_hex(32)
 
 def connect(page):
     page.get_by_role("button", name="Подключение", exact=True).click()
+    page.get_by_text("Ввести ключ вручную").click()
     page.get_by_label("Ключ синхронизации").fill(KEY)
     page.get_by_role("button", name="Подключить", exact=True).click()
     expect(page.locator("#status")).to_have_text("Синхронизировано")
@@ -70,6 +71,20 @@ def check(origin):
         b.reload()
         b.locator("#items button").filter(has_text="Конфликт").click()
         expect(b.get_by_label("Markdown")).to_have_value("# Конфликт · Карта\n\n# Карта\n\nЛокальная правка")
+        paired = browser.new_context()
+        desktop = paired.new_page()
+        desktop.goto(origin)
+        desktop.get_by_role("button", name="Подключение", exact=True).click()
+        expect(desktop.locator("#pair-code")).to_have_text(__import__("re").compile(r"^\d{4} \d{4}$"))
+        code = desktop.locator("#pair-code").inner_text().replace(" ", "")
+        approved = first.request.post(origin + "/pair/approve",
+                                      headers={"Authorization": "Bearer " + KEY}, data={"code": code})
+        assert approved.status == 200
+        expect(desktop.locator("#status")).to_have_text("Синхронизировано", timeout=10000)
+        expect(desktop.locator("#settings")).not_to_be_visible()
+        desktop.reload()
+        desktop.locator("#sync").click()
+        expect(desktop.locator("#status")).to_have_text("Синхронизировано", timeout=10000)
         browser.close()
 
 
