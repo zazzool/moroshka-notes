@@ -5,6 +5,8 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -72,8 +74,22 @@ class MainActivity : Activity() {
         this.text = text; textSize = size; setTextColor(Color.rgb(38,65,52))
         if (size >= 22) typeface = Typeface.SERIF
     }
+    private fun surface(color: Int, radius: Int = 18) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radius).toFloat()
+    }
+    private val ink = Color.rgb(37, 65, 53)
+    private val muted = Color.rgb(102, 119, 103)
+    private val pale = Color.rgb(235, 239, 227)
     private fun button(text: String, action: () -> Unit) = Button(this).apply {
-        this.text = text; isAllCaps = false; setOnClickListener { safely(action) }
+        this.text = text
+        isAllCaps = false
+        textSize = 14f
+        setTextColor(ink)
+        background = surface(pale)
+        minHeight = dp(48)
+        setPadding(dp(14), 0, dp(14), 0)
+        setOnClickListener { safely(action) }
     }
     private fun safely(action: () -> Unit) {
         try { action() } catch (e: Exception) { notice(e.message ?: "Не удалось выполнить действие") }
@@ -92,25 +108,67 @@ class MainActivity : Activity() {
     }
     private fun library() {
         current = null; editor = null; root.removeAllViews()
-        root.addView(label("Moroshka Notes", 30f))
-        val controls = row(); root.addView(controls)
-        controls.addView(button("＋ Заметка") { edit(vault.create("# Новая заметка\n\n"), true) })
-        controls.addView(button("Синхронизация") { connection() })
-        controls.addView(button("⋯") { menu() }.apply { contentDescription = "Действия библиотеки" })
-        val query = EditText(this).apply { hint = "Поиск по тексту или #тегу"; setSingleLine(); setText(search) }
-        root.addView(query)
-        val toggle = button(if (tasks) "Задачи ▾" else "Заметки ▾") { tasks = !tasks; library() }
-        root.addView(toggle)
-        val list = column(); root.addView(ScrollView(this).apply { addView(list) })
+        val header = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        root.addView(header)
+        val brand = column()
+        brand.addView(label("MOROSHKA", 12f).apply { letterSpacing = .16f; setTextColor(muted) })
+        brand.addView(label("Моя библиотека", 32f))
+        header.addView(brand, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        header.addView(button("⋯") { menu() }.apply { contentDescription = "Действия библиотеки" })
+        val query = EditText(this).apply {
+            hint = "⌕  Поиск по заметкам и тегам"
+            contentDescription = "Поиск по заметкам"
+            setSingleLine()
+            setText(search)
+            textSize = 16f
+            setPadding(dp(16), 0, dp(16), 0)
+            background = surface(Color.WHITE)
+        }
+        root.addView(query, LinearLayout.LayoutParams(MATCH_PARENT, dp(52)).apply { topMargin = dp(20); bottomMargin = dp(16) })
+        val tabs = row()
+        root.addView(tabs)
+        fun tab(name: String, selected: Boolean, action: () -> Unit) = button(name, action).apply {
+            if (selected) {
+                background = surface(ink, 24)
+                setTextColor(Color.WHITE)
+            }
+        }
+        tabs.addView(tab("Заметки", !tasks) { tasks = false; library() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        tabs.addView(tab("Задачи", tasks) { tasks = true; library() }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(8) })
+        val section = label(if (tasks) "Задачи" else "Все заметки", 23f)
+        root.addView(section, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(22); bottomMargin = dp(10) })
+        val list = column()
+        root.addView(ScrollView(this).apply { isFillViewport = true; addView(list) }, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        val actions = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        root.addView(actions, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+        actions.addView(button("↻") {
+            val url = settings.getString("url", "").orEmpty()
+            val key = settings.getString("key", "").orEmpty()
+            if (url.isNotEmpty() && key.isNotEmpty()) synchronize(url, key) else connection()
+        }.apply { contentDescription = "Синхронизировать" }, LinearLayout.LayoutParams(dp(56), dp(56)))
+        actions.addView(button("＋  Новая заметка") { edit(vault.create("# Новая заметка\n\n"), true) }.apply {
+            background = surface(ink, 22); setTextColor(Color.WHITE); textSize = 16f
+            elevation = dp(3).toFloat()
+        }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(10) })
         fun refresh() {
             list.removeAllViews()
             for (note in vault.all().filter { it.text.contains(search, ignoreCase = true) }) {
                 if (!tasks) {
-                    val entry = label(note.title, 22f).apply {
-                        setPadding(dp(8), dp(12), dp(8), dp(12))
-                        isFocusable = true; setOnClickListener { edit(note) }
+                    val entry = column().apply {
+                        background = surface(Color.WHITE, 20)
+                        setPadding(dp(18), dp(16), dp(18), dp(16))
+                        isFocusable = true
+                        contentDescription = note.title
+                        setOnClickListener { edit(note) }
+                        addView(label(note.title, 22f))
+                        val preview = note.text.lines().filter { it.isNotBlank() && !it.startsWith("# ") }.joinToString(" ")
+                        if (preview.isNotBlank()) addView(label(preview, 14f).apply {
+                            setTextColor(muted); maxLines = 2
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                            setPadding(0, dp(6), 0, 0)
+                        })
                     }
-                    list.addView(entry)
+                    list.addView(entry, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
                 } else note.text.lines().forEachIndexed { index, line ->
                     val match = Regex("^\\s*[-*] \\[([ xX])] (.+)").find(line)
                     if (match != null) list.addView(CheckBox(this).apply {
@@ -158,6 +216,7 @@ class MainActivity : Activity() {
             gravity = android.view.Gravity.TOP
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             typeface = Typeface.SERIF; textSize = 20f; setText(note.text)
+            background = null; setPadding(dp(4), dp(24), dp(4), dp(12)); setLineSpacing(dp(4).toFloat(), 1f)
             contentDescription = "Текст Markdown"
         }
         editor = field; root.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
