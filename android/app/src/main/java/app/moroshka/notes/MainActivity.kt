@@ -117,6 +117,13 @@ class MainActivity : Activity() {
     }
     private fun library() {
         current = null; editor = null; root.removeAllViews()
+        if (settings.getString("url", "").isNullOrBlank()) {
+            root.addView(button("Подключить или развернуть сервер") {
+                AlertDialog.Builder(this).setItems(arrayOf("Развернуть свой сервер", "Подключить существующий")) { _, choice ->
+                    if (choice == 0) installServer() else connection()
+                }.show()
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
+        }
         if (!DocumentBackup(this).configured) {
             root.addView(button("Выбрать папку для сохранения заметок") {
                 startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
@@ -216,12 +223,13 @@ class MainActivity : Activity() {
         changes(query) { search = query.text.toString(); refresh() }; refresh()
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Настроить сервер")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
             else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
             else if (index == 2) deleteNotes()
             else if (index == 3) pairDevice()
+            else if (index == 4) installServer()
             else connection()
         }.show()
     }
@@ -380,6 +388,72 @@ class MainActivity : Activity() {
         }
         if (entries.isEmpty()) return notice("Добавьте [[Название]] для связи с другой заметкой.")
         AlertDialog.Builder(this).setTitle("Связи").setItems(entries.map { it.first }.toTypedArray()) { _, i -> safely(entries[i].second) }.show()
+    }
+    private fun installServer() {
+        val content = column().apply { setPadding(dp(20), 0, dp(20), 0) }
+        val host = EditText(this).apply {
+            hint = "IP-адрес или домен сервера"
+            setSingleLine()
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val password = EditText(this).apply {
+            hint = "Пароль root"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine()
+        }
+        content.addView(host)
+        content.addView(password)
+        content.addView(label("Сервер должен быть доступен по SSH, а порты 80 и 443 — из интернета.", 14f))
+        val dialog = AlertDialog.Builder(this).setTitle("Свой сервер").setView(content)
+            .setNegativeButton("Отмена", null).setPositiveButton("Развернуть", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val address = host.text.toString().trim()
+                val secret = password.text.toString().toByteArray(Charsets.UTF_8)
+                if (address.isBlank() || secret.isEmpty()) {
+                    secret.fill(0)
+                    notice("Введите адрес и пароль root.")
+                    return@setOnClickListener
+                }
+                password.text.clear()
+                dialog.dismiss()
+                val status = label("Подключение…", 16f).apply { setPadding(dp(24), dp(16), dp(24), dp(16)) }
+                val progressDialog = AlertDialog.Builder(this).setTitle("Развёртывание сервера")
+                    .setView(status).setNegativeButton("В фоне", null).setCancelable(false).create()
+                progressDialog.show()
+                worker.execute {
+                    val result = runCatching {
+                        ServerInstaller(this) { fingerprint ->
+                            val latch = java.util.concurrent.CountDownLatch(1)
+                            var accepted = false
+                            runOnUiThread {
+                                if (isDestroyed) { latch.countDown(); return@runOnUiThread }
+                                AlertDialog.Builder(this).setTitle("Проверьте SSH-ключ сервера")
+                                    .setMessage(fingerprint + "\n\nСверьте отпечаток с данными вашего VPS-провайдера.")
+                                    .setPositiveButton("Совпадает") { _, _ -> accepted = true; latch.countDown() }
+                                    .setNegativeButton("Отмена") { _, _ -> latch.countDown() }
+                                    .setOnCancelListener { latch.countDown() }.show()
+                            }
+                            latch.await(90, java.util.concurrent.TimeUnit.SECONDS) && accepted
+                        }.install(address, secret) { message -> runOnUiThread { status.text = message } }.also { (url, key) ->
+                            check(settings.edit().putString("url", url).putString("key", key).commit()) {
+                                "Сервер готов, но настройки подключения не сохранились. Повторите подключение."
+                            }
+                        }
+                    }
+                    secret.fill(0)
+                    runOnUiThread {
+                        if (isDestroyed) return@runOnUiThread
+                        progressDialog.dismiss()
+                        result.onSuccess { (url, key) ->
+                            Toast.makeText(this, "Сервер готов. Синхронизируем заметки.", Toast.LENGTH_LONG).show()
+                            safely { synchronize(url, key) }
+                        }.onFailure { notice(it.message ?: "Не удалось развернуть сервер") }
+                    }
+                }
+            }
+        }
+        dialog.show()
     }
     private fun pairDevice() {
         val address = settings.getString("url", "").orEmpty()

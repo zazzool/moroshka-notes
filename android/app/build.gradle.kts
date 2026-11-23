@@ -11,8 +11,8 @@ android {
         testInstrumentationRunner = "app.moroshka.notes.SmokeRunner"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.1.0-alpha.4"
+        versionCode = 5
+        versionName = "0.1.0-alpha.5"
     }
     buildTypes {
         getByName("debug") { applicationIdSuffix = ".debug" }
@@ -23,3 +23,21 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
+
+dependencies {
+    implementation("com.github.mwiede:jsch:2.28.2")
+}
+
+val prepareServer by tasks.registering(Sync::class) {
+    from(rootProject.layout.projectDirectory.dir("../server")) { into("server") }
+    from(rootProject.layout.projectDirectory.dir("../web")) { into("web") }
+    from(rootProject.layout.projectDirectory.dir("../deploy")) {
+        include("install.sh", "compose.yaml", "Caddyfile")
+        into("deploy")
+    }
+    from(rootProject.layout.projectDirectory.file("../Dockerfile"))
+    from(rootProject.layout.projectDirectory.file("../.dockerignore"))
+    into(layout.buildDirectory.dir("generated/server-assets/server"))
+}
+android.sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/server-assets"))
+tasks.named("preBuild").configure { dependsOn(prepareServer) }

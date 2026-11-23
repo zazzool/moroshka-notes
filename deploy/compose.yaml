@@ -12,7 +12,7 @@ services:
     security_opt:
       - no-new-privileges:true
   proxy:
-    image: caddy:2-alpine
+    image: caddy:2.11.4-alpine
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:?}
