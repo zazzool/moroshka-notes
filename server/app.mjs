@@ -70,10 +70,14 @@ export function application(options, request = fetch) {
         }
       } else if (pathname.startsWith('/api/')) {
         requireKey(req, token)
-        if (get && pathname === '/api/notes') return json(res, 200, { notes: vault.list() })
+        if (get && pathname === '/api/notes') return json(res, 200, { notes: vault.list(), deleted: vault.deleted() })
         if (req.method === 'PUT' && pathname.startsWith('/api/notes/')) {
           const input = await payload(req)
           return json(res, 200, vault.put(pathname.slice('/api/notes/'.length), input))
+        }
+        if (req.method === 'DELETE' && pathname.startsWith('/api/notes/')) {
+          const { base } = await payload(req)
+          return json(res, 200, vault.remove(pathname.slice('/api/notes/'.length), base))
         }
         if (req.method === 'POST' && pathname === '/api/summary') {
           if (!openrouterKey || !model) throw new ApiError(503, 'Владелец сервера ещё не подключил OpenRouter')

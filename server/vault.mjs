@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const validId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
@@ -34,6 +34,7 @@ export function openVault(dir) {
         !(base === null || (typeof base === 'string' && /^[0-9a-f]{64}$/.test(base)))) {
       throw new ApiError(400, 'Проверьте текст, размер заметки и базовую ревизию')
     }
+    if (existsSync(join(dir, id + '.deleted'))) throw new ApiError(409, 'Заметка удалена на другом устройстве')
     const current = read(id)
     const revision = digest(text)
     if (current?.revision === revision) return current
@@ -45,5 +46,18 @@ export function openVault(dir) {
     } finally { rmSync(temporary, { force: true }) }
     return { id, text, revision }
   }
-  return { read, list, put }
+  function deleted() {
+    return readdirSync(dir).filter(n => n.endsWith('.deleted') && validId.test(n.slice(0, -8)))
+      .map(n => ({ id: n.slice(0, -8), revision: digest(readFileSync(join(dir, n), 'utf8')) }))
+  }
+  function remove(id, base) {
+    if (!validId.test(id) || typeof base !== 'string' || !/^[0-9a-f]{64}$/.test(base)) throw new ApiError(400, 'Некорректная ревизия')
+    const tombstone = join(dir, id + '.deleted')
+    if (existsSync(tombstone)) return { deleted: true }
+    const current = read(id)
+    if (!current || current.revision !== base) throw new ApiError(409, 'Заметка изменилась на другом устройстве')
+    renameSync(join(dir, id + '.md'), tombstone)
+    return { deleted: true }
+  }
+  return { read, list, put, deleted, remove }
 }

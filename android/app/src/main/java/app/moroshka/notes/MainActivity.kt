@@ -3,6 +3,13 @@ package app.moroshka.notes
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.location.Geocoder
+import java.util.Locale
+import android.speech.RecognizerIntent
+import java.text.DateFormat
+import java.util.Date
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -32,6 +39,7 @@ class MainActivity : Activity() {
     private var syncing = false
     private var pendingShare: String? = null
     private var exportId: String? = null
+    private var placeField: AutoCompleteTextView? = null
     private var search = ""
     private var tasks = false
     private val autoSave = Runnable { safely { flush() } }
@@ -41,6 +49,7 @@ class MainActivity : Activity() {
         vault = Vault(this)
         root = column()
         root.setBackgroundColor(Color.rgb(249,249,242))
+        root.setPadding(dp(16), dp(8), dp(16), dp(8))
         root.setOnApplyWindowInsetsListener { v, insets ->
             v.setPadding(dp(16), dp(8) + insets.systemWindowInsetTop, dp(16), dp(8) + insets.systemWindowInsetBottom)
             insets
@@ -108,6 +117,12 @@ class MainActivity : Activity() {
     }
     private fun library() {
         current = null; editor = null; root.removeAllViews()
+        if (!DocumentBackup(this).configured) {
+            root.addView(button("Выбрать папку для сохранения заметок") {
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
+        }
         val header = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
         root.addView(header)
         val brand = column()
@@ -146,7 +161,7 @@ class MainActivity : Activity() {
             val key = settings.getString("key", "").orEmpty()
             if (url.isNotEmpty() && key.isNotEmpty()) synchronize(url, key) else connection()
         }.apply { contentDescription = "Синхронизировать" }, LinearLayout.LayoutParams(dp(56), dp(56)))
-        actions.addView(button("＋  Новая заметка") { edit(vault.create("# Новая заметка\n\n"), true) }.apply {
+        actions.addView(button("＋  Новая заметка") { edit(vault.create("# " + suggestedTitle() + "\n\n"), true) }.apply {
             background = surface(ink, 22); setTextColor(Color.WHITE); textSize = 16f
             elevation = dp(3).toFloat()
         }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(10) })
@@ -160,6 +175,16 @@ class MainActivity : Activity() {
                         isFocusable = true
                         contentDescription = note.title
                         setOnClickListener { edit(note) }
+                        setOnLongClickListener {
+                            AlertDialog.Builder(this@MainActivity).setTitle(note.title)
+                                .setItems(arrayOf("Открыть", "Удалить")) { _, choice ->
+                                    if (choice == 0) edit(note)
+                                    else AlertDialog.Builder(this@MainActivity).setMessage("Удалить эту заметку?")
+                                        .setNegativeButton("Отмена", null)
+                                        .setPositiveButton("Удалить") { _, _ -> safely { vault.remove(listOf(note.id)); library() } }.show()
+                                }.show()
+                            true
+                        }
                         addView(label(note.title, 22f))
                         val preview = note.text.lines().filter { it.isNotBlank() && !it.startsWith("# ") }.joinToString(" ")
                         if (preview.isNotBlank()) addView(label(preview, 14f).apply {
@@ -191,10 +216,27 @@ class MainActivity : Activity() {
         changes(query) { search = query.text.toString(); refresh() }; refresh()
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Настроить сервер")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Настроить сервер")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
+            else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
+            else if (index == 2) deleteNotes()
             else connection()
         }.show()
+    }
+    private fun deleteNotes() {
+        val notes = vault.all()
+        if (notes.isEmpty()) return notice("Нет заметок для удаления.")
+        val selected = BooleanArray(notes.size)
+        AlertDialog.Builder(this).setTitle("Выберите заметки")
+            .setMultiChoiceItems(notes.map { it.title }.toTypedArray(), selected) { _, index, checked -> selected[index] = checked }
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Удалить") { _, _ ->
+                val ids = notes.filterIndexed { index, _ -> selected[index] }.map { it.id }
+                if (ids.isNotEmpty()) AlertDialog.Builder(this).setMessage("Удалить заметок: ${ids.size}?")
+                    .setNegativeButton("Отмена", null)
+                    .setPositiveButton("Удалить") { _, _ -> safely { vault.remove(ids); library() } }.show()
+            }.show()
     }
     private fun edit(note: Note, selectTitle: Boolean = false) {
         flush(); current = note.id; root.removeAllViews()
@@ -220,8 +262,109 @@ class MainActivity : Activity() {
             contentDescription = "Текст Markdown"
         }
         editor = field; root.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-        if (selectTitle) { field.requestFocus(); field.setSelection(2, note.text.indexOf('\n')) }
+        if (selectTitle) { field.requestFocus(); field.setSelection(note.text.length) }
+        val tools = row()
+        root.addView(tools)
+        tools.addView(button("＋ Связь") { insertLink() }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        tools.addView(button("Место") { choosePlace() }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { marginStart = dp(8) })
+        tools.addView(button("🎙 Голос") { voiceInput() }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { marginStart = dp(8) })
         changes(field) { dirty = true; handler.removeCallbacks(autoSave); handler.postDelayed(autoSave, 350) }
+    }
+    private fun suggestedTitle(): String {
+        val now = java.util.Calendar.getInstance()
+        val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
+        val part = when (hour) {
+            in 5..11 -> "утро"
+            in 12..16 -> "день"
+            in 17..22 -> "вечер"
+            else -> "ночь"
+        }
+        val date = java.text.SimpleDateFormat("d MMMM yyyy 'года'", Locale("ru")).format(now.time)
+        val time = java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(now.time)
+        return "$date, $part · $time"
+    }
+    private fun choosePlace() {
+        val preferences = getSharedPreferences("places", MODE_PRIVATE)
+        val suggestions = preferences.getString("recent", "").orEmpty().split("\n").filter { it.isNotBlank() }
+        val field = AutoCompleteTextView(this).apply {
+            hint = "Город или место"
+            setSingleLine()
+            threshold = 1
+            setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, suggestions))
+        }
+        placeField = field
+        val content = column()
+        content.setPadding(dp(20), 0, dp(20), 0)
+        content.addView(field)
+        content.addView(button("Определить местоположение") {
+            if (checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+                requestPermissions(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), 7)
+            else locate()
+        })
+        AlertDialog.Builder(this).setTitle("Место").setView(content)
+            .setNegativeButton("Отмена") { _, _ -> placeField = null }
+            .setPositiveButton("Добавить") { _, _ ->
+                val name = field.text.toString().trim().replace("\n", " ")
+                placeField = null
+                if (name.isNotEmpty()) {
+                    preferences.edit().putString("recent", (listOf(name) + suggestions.filterNot { it.equals(name, true) }).take(10).joinToString("\n")).apply()
+                    editor?.let { text ->
+                        val end = text.text.indexOf('\n').let { if (it < 0) text.length() else it }
+                        text.text.insert(end, " · " + name)
+                    }
+                }
+            }.show()
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 7 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) locate()
+    }
+    private fun locate() {
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val location = manager.getProviders(true).mapNotNull { provider ->
+            try { manager.getLastKnownLocation(provider) } catch (_: SecurityException) { null }
+        }.maxByOrNull { it.time }
+        if (location == null) {
+            notice("Местоположение пока недоступно. Введите место вручную.")
+            return
+        }
+        worker.execute {
+            val place = try {
+                @Suppress("DEPRECATION")
+                val address = Geocoder(this, Locale.getDefault()).getFromLocation(location.latitude, location.longitude, 1)?.firstOrNull()
+                listOfNotNull(address?.locality, address?.subLocality).distinct().joinToString(", ")
+            } catch (_: Exception) { "" }
+            runOnUiThread {
+                if (place.isEmpty()) notice("Место не найдено. Введите его вручную.")
+                else placeField?.setText(place)
+            }
+        }
+    }
+    private fun insertLink() {
+        safely { flush() }
+        val available = vault.all().filter { it.id != current }
+        if (available.isEmpty()) {
+            notice("Сначала создайте ещё одну заметку.")
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Добавить связь")
+            .setItems(available.map { it.title }.toTypedArray()) { _, index ->
+                val field = editor ?: return@setItems
+                val start = field.selectionStart.coerceAtLeast(0)
+                val end = field.selectionEnd.coerceAtLeast(start)
+                field.text.replace(start, end, "[[" + available[index].title + "]]")
+            }.show()
+    }
+    private fun voiceInput() {
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(RecognizerIntent.EXTRA_PROMPT, "Продиктуйте текст заметки")
+            startActivityForResult(intent, 3)
+        } catch (e: android.content.ActivityNotFoundException) {
+            notice("На устройстве не найдено приложение для распознавания речи.")
+        }
     }
     private fun connections(note: Note) {
         val all = vault.all()
@@ -276,10 +419,23 @@ class MainActivity : Activity() {
     @Deprecated("Platform document picker")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
-        val uri = data?.data ?: return
         if (resultCode != RESULT_OK) return
+        if (requestCode == 3) {
+            val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
+            editor?.let { field ->
+                val start = field.selectionStart.coerceAtLeast(0)
+                val end = field.selectionEnd.coerceAtLeast(start)
+                field.text.replace(start, end, spoken)
+            }
+            return
+        }
+        val uri = data?.data ?: return
         safely {
-            if (requestCode == 1) {
+            if (requestCode == 4) {
+                DocumentBackup(this).connect(uri, vault)
+                library()
+                notice("Папка подключена. Новые версии заметок будут сохраняться в ней. После переустановки выберите эту папку снова.")
+            } else if (requestCode == 1) {
                 val bytes = requireNotNull(contentResolver.openInputStream(uri)).use { input ->
                     val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192)
                     while (true) {

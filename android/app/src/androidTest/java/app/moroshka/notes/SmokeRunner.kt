@@ -47,6 +47,7 @@ class SmokeRunner : Instrumentation() {
             val vault = Vault(targetContext)
             val note = vault.all().single { it.title == title }
             check(note.text == edited && note.links == listOf("Лес"))
+            var removed = false
             if (args.containsKey("fixtureCa")) {
                 val store = KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null) }
                 val der = Base64.decode(args.getString("fixtureCa"), Base64.DEFAULT)
@@ -57,10 +58,16 @@ class SmokeRunner : Instrumentation() {
                 try {
                     HttpsURLConnection.setDefaultSSLSocketFactory(ssl.socketFactory)
                     check(vault.sync("https://localhost:18443", requireNotNull(args.getString("fixtureKey"))) == 0)
+                    vault.remove(listOf(note.id))
+                    removed = true
+                    check(vault.sync("https://localhost:18443", requireNotNull(args.getString("fixtureKey"))) == 0)
                 } finally {
                     HttpsURLConnection.setDefaultSSLSocketFactory(original)
                 }
             }
+            if (!removed) vault.remove(listOf(note.id))
+            check(vault.all().none { it.id == note.id })
+            check(java.io.File(targetContext.filesDir, "trash/${note.id}.md").readText() == edited)
             runOnMainSync { activity.finish() }
             note.id
         }

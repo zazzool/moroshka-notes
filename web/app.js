@@ -107,7 +107,18 @@ async function sync() {
   persistEditor(); busy = true; document.querySelector('.shell').inert = true; $('status').textContent = 'Синхронизация…'
   let conflicts = 0
   try {
-    const {notes:remote} = await api('/api/notes')
+    const {notes:remote, deleted = []} = await api('/api/notes')
+    for (const item of deleted) {
+      const local = notes.get(item.id)
+      if (!local) continue
+      if (local.dirty) {
+        create(local.text)
+        conflicts++
+      }
+      localStorage.removeItem(prefix + item.id)
+      notes.delete(item.id)
+      if (selected === item.id) { selected = null; $('reader').hidden = true }
+    }
     const byId = new Map(remote.map(n => [n.id,n]))
     for (const n of [...notes.values()]) {
       if (!n.dirty) continue

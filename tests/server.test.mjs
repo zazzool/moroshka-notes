@@ -65,3 +65,17 @@ test('invalid writes, oversized note, missing configuration and anonymous shell'
   for (const path of ['/','/sw.js','/icon.png','/app.js','/style.css']) assert.equal((await api(path)).status,200)
   assert.throws(()=>application({token:'short'}))
 })
+
+test('delete preserves server copy and rejects stale writes', async t => {
+  const {api,dir} = await fixture(t), id = randomUUID(), path = '/api/notes/' + id
+  const text = '# Archived\noriginal'
+  await api(path,'PUT',{text,base:null})
+  assert.equal((await api(path,'DELETE',{base:digest('stale')})).status,409)
+  assert.equal((await api(path,'DELETE',{base:digest(text)})).status,200)
+  assert.equal((await api(path,'DELETE',{base:digest(text)})).status,200)
+  assert.equal(readFileSync(join(dir,id+'.deleted'),'utf8'),text)
+  assert.equal((await api(path,'PUT',{text:'stale edit',base:digest(text)})).status,409)
+  const data = await (await api('/api/notes')).json()
+  assert.deepEqual(data.notes,[])
+  assert.deepEqual(data.deleted,[{id,revision:digest(text)}])
+})

@@ -51,6 +51,20 @@ def check(origin):
         assert "Локальная правка" in b.get_by_label("Markdown").input_value()
         b.locator("#sync").click()
         expect(b.locator("#status")).to_have_text("Синхронизировано")
+        # A remote deletion must retain a newer local edit as a separate note.
+        b.get_by_role("button", name="Закрыть редактор").click()
+        b.locator("#items button").filter(has_text="Река").click()
+        b.get_by_label("Markdown").fill("# Река\n\nНеотправленная правка")
+        response = first.request.get(origin + "/api/notes", headers={"Authorization": "Bearer " + KEY})
+        remote = next(n for n in response.json()["notes"] if n["text"] == "# Река\n")
+        deleted = first.request.delete(origin + "/api/notes/" + remote["id"],
+                                       headers={"Authorization": "Bearer " + KEY}, data={"base": remote["revision"]})
+        assert deleted.status == 200
+        b.locator("#sync").click()
+        expect(b.locator("#msgTitle")).to_have_text("Сохранены обе версии")
+        b.get_by_role("button", name="Закрыть", exact=True).click()
+        b.locator("#items button").filter(has_text="Неотправленная правка").click()
+        assert "Неотправленная правка" in b.get_by_label("Markdown").input_value()
         b.evaluate("navigator.serviceWorker.ready")
         second.set_offline(True)
         b.reload()
