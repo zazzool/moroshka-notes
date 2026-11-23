@@ -1,0 +1,33 @@
+name: Deploy to my server
+on: workflow_dispatch
+permissions:
+  contents: read
+concurrency:
+  group: moroshka-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/*.test.mjs
+      - name: Install or update over SSH
+        env:
+          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET }}
+          DOMAIN: ${{ vars.DOMAIN }}
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          bash deploy/publish.sh "$DEPLOY_TARGET" "$DOMAIN"
+

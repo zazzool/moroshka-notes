@@ -1,0 +1,32 @@
+name: moroshka
+services:
+  app:
+    image: ${APP_IMAGE:?}
+    restart: unless-stopped
+    env_file: /etc/moroshka/keys.env
+    environment:
+      PUBLIC_URL: https://${DOMAIN:?}
+    volumes:
+      - notes:/data
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - proxy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+volumes:
+  notes:
+  certificates:
+  proxy_config:

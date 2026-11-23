@@ -6,7 +6,7 @@ import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
 
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']], ['/app.js', ['app.js', 'text/javascript']],
-  ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']]
+  ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']]
 ])
 const hash = value => createHash('sha256').update(value).digest()
 function json(res, status, body) {
@@ -77,9 +77,10 @@ export function application(options, request = fetch) {
         }
         if (req.method === 'POST' && pathname === '/api/summary') {
           if (!openrouterKey || !model) throw new ApiError(503, 'Владелец сервера ещё не подключил OpenRouter')
-          const { id } = await payload(req)
+          const { id, revision } = await payload(req)
           const note = vault.read(id)
           if (!note) throw new ApiError(404, 'Заметка не найдена')
+          if (note.revision !== revision) throw new ApiError(409, 'Сначала синхронизируйте актуальную версию заметки')
           const reply = await request('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST', headers: { Authorization: 'Bearer ' + openrouterKey, 'Content-Type': 'application/json' },
             signal: AbortSignal.timeout(45000),

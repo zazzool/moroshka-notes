@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#274d43"><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/style.css"><title>Moroshka Notes</title><script type="module" src="/app.js"></script></head>
+<body>
+<div class="shell">
+<aside><div class="brand"><img src="/icon.png" width="40" height="40" alt=""><div>Moroshka <em>Notes</em></div></div>
+<button id="new" class="primary">＋ Новая заметка</button>
+<nav aria-label="Библиотека"><button data-view="notes" aria-current="page">Заметки</button><button data-view="tasks">Задачи</button></nav>
+<div class="connection"><span id="status" role="status">На этом устройстве</span><button id="connect">Подключение</button><button id="sync">Синхронизировать</button></div></aside>
+<main><div class="top"><span>Моя библиотека</span><button id="import">Импорт .md</button><input id="file" type="file" accept=".md,text/markdown,text/plain" multiple hidden></div>
+<header><h1 id="heading">Заметки</h1><span id="count"></span></header>
+<label class="search"><span aria-hidden="true">⌕</span><input type="search" id="search" aria-label="Поиск" placeholder="Найти заметку или #тег"></label>
+<div id="items"></div></main>
+<section id="reader" hidden><div class="readerBar"><button id="close" aria-label="Закрыть редактор">← Библиотека</button><button id="export">Скачать .md</button></div>
+<label for="body">Markdown</label><textarea id="body" spellcheck="true" placeholder="# Название заметки"></textarea>
+<div class="editorActions"><span id="saved" role="status"></span><button id="summary">Резюме в OpenRouter</button></div>
+<div id="related"></div></section></div>
+<dialog id="settings"><form method="dialog"><h2>Свой сервер</h2><p>Эта библиотека синхронизируется с сервером, на котором открыто приложение.</p><label for="key">Ключ синхронизации</label><input type="password" id="key" autocomplete="off"><div class="row"><button value="cancel">Отмена</button><button value="save" class="primary">Подключить</button></div></form></dialog>
+<dialog id="message"><h2 id="msgTitle"></h2><p id="msgText"></p><form method="dialog"><button>Закрыть</button></form></dialog>
+</body></html>
