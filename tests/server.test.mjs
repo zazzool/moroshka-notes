@@ -119,3 +119,47 @@ test('approved visual assets are served without authentication using the correct
   }
   assert.equal((await fetch(origin + '/assets/not-a-file.webp')).status, 404)
 })
+
+
+test('history archives unique previous revisions and never archives rejected writes', async t => {
+  const {api,dir,actionsToken} = await fixture(t)
+  const id=randomUUID(), path='/api/notes/'+id, history='/api/history/'+id
+  const first='# История\n\nПервая редакция', second='# История\n\nВторая редакция'
+  const a=digest(first), b=digest(second)
+  assert.equal((await api(path,'PUT',{text:first,base:null})).status,200)
+  assert.deepEqual((await (await api(history)).json()).revisions,[])
+  assert.equal((await api(path,'PUT',{text:second,base:a})).status,200)
+  assert.equal((await api(path,'PUT',{text:'rejected',base:a})).status,409)
+  assert.equal((await api(path,'PUT',{text:second,base:a})).status,200)
+  let list=(await (await api(history)).json()).revisions
+  assert.deepEqual(list.map(x=>x.revision),[a])
+  assert.ok(Number.isFinite(Date.parse(list[0].archivedAt)))
+  assert.deepEqual(await (await api(history+'/'+a)).json(),{id,revision:a,text:first})
+  assert.equal(readFileSync(join(dir,'history',id,a+'.md'),'utf8'),first)
+  assert.equal((await api(history+'/'+b)).status,404)
+  assert.equal((await api(history,'GET',undefined,'wrong')).status,401)
+  assert.equal((await api(history,'GET',undefined,actionsToken)).status,401)
+  assert.equal((await api('/api/history/not-a-uuid')).status,400)
+  assert.equal((await api(history+'/not-a-hash')).status,400)
+  assert.equal((await api(path,'PUT',{text:first,base:b})).status,200)
+  assert.equal((await api(path,'PUT',{text:second,base:a})).status,200)
+  list=(await (await api(history)).json()).revisions
+  assert.deepEqual(new Set(list.map(x=>x.revision)),new Set([a,b]))
+  assert.equal(list.length,2)
+  assert.equal((await api(path,'DELETE',{base:b})).status,200)
+  const trash=(await (await api('/api/trash')).json()).notes
+  assert.equal(trash.length,1)
+  assert.deepEqual({id:trash[0].id,title:trash[0].title,revision:trash[0].revision},{id,title:'История',revision:b})
+  const deleted=await (await api('/api/trash/'+id)).json()
+  assert.equal(deleted.text,second)
+  assert.equal((await api('/api/trash','GET',undefined,actionsToken)).status,401)
+  assert.equal((await api('/api/trash/invalid')).status,400)
+  assert.equal((await api('/api/trash/'+randomUUID())).status,404)
+  assert.equal((await api(path,'PUT',{text:first,base:null})).status,409)
+  const restored=randomUUID()
+  assert.equal((await api('/api/notes/'+restored,'PUT',{text:deleted.text,base:null})).status,200)
+  const live=await (await api('/api/notes')).json()
+  assert.deepEqual(live.notes,[{id:restored,text:second,revision:b}])
+  assert.deepEqual(live.deleted,[{id,revision:b}])
+  assert.equal((await api(history+'/'+a)).status,200)
+})
