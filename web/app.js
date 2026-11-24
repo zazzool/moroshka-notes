@@ -3,6 +3,12 @@ import { encodeArchive, decodeArchive, planRestore, maxArchiveBytes } from '/bac
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
 const captureKey = 'moroshka.captureDraft'
+const autoKey = 'moroshka.autoSync'
+let autoEnabled = localStorage.getItem(autoKey) === 'true'
+let autoTimer = null, autoFailures = 0, autoAuthBlocked = false
+let autoNotBefore = 0, autoGeneration = 0
+let exchangeActive = false
+const AUTO_DELAY = 3000, AUTO_POLL = 120000
 const notes = new Map()
 let selected, view = 'notes', dirtyEditor = false, busy = false
 let token = localStorage.getItem('moroshka.key') || sessionStorage.getItem('moroshka.key') || ''
@@ -18,6 +24,7 @@ function put(note) {
   if (new Blob([note.text]).size > 512 * 1024) throw Error('Предел одной заметки — 512 КиБ')
   localStorage.setItem(prefix + note.id, JSON.stringify(note))
   notes.set(note.id, note)
+  if (note.dirty && !exchangeActive) requestAuto(AUTO_DELAY)
 }
 function create(text) {
   const n = { id: crypto.randomUUID(), text, base: null, dirty: true }
@@ -45,6 +52,7 @@ function select(id) {
   persistEditor(); selected = id; $('reader').hidden = !id
   if (id) { $('body').value = notes.get(id).text; $('saved').textContent = notes.get(id).dirty ? 'На устройстве' : 'Синхронизировано' }
   render()
+  if (!id && autoEnabled && !exchangeActive) requestAuto(AUTO_DELAY)
 }
 function related() {
   const group = $('related'); group.replaceChildren()
@@ -177,20 +185,74 @@ async function startPairing() {
   $('pair-retry').hidden = false
 }
 function openSettings() {
+  if (busy) return
   $('key').value = token
   $('settings').showModal()
   startPairing()
 }
-async function sync() {
-  if (!token) { openSettings(); return }
+function requestAuto(delay = AUTO_POLL) {
+  if (!autoEnabled || !token || autoAuthBlocked) return
+  clearTimeout(autoTimer)
+  autoTimer = setTimeout(runAuto, Math.max(delay, autoNotBefore - Date.now()))
+}
+async function runAuto() {
+  autoTimer = null
+  if (!autoEnabled || !token || autoAuthBlocked) return
+  if (document.visibilityState !== 'visible') { requestAuto(AUTO_POLL); return }
+  if (busy || document.querySelector('dialog[open]')) { requestAuto(5000); return }
+  if (!navigator.onLine) {
+    $('status').textContent = 'Офлайн · локальные заметки сохранены'
+    requestAuto(AUTO_POLL)
+    return
+  }
+  await sync(true)
+}
+function setAuto(value) {
+  localStorage.setItem(autoKey, String(value))
+  autoEnabled = value
+  autoFailures = 0; autoAuthBlocked = false; autoNotBefore = 0; autoGeneration++
+  clearTimeout(autoTimer); autoTimer = null
+  if (value) requestAuto(AUTO_DELAY)
+  else if (!busy) $('status').textContent = 'Автообмен выключен'
+}
+function applySynced(note) {
+  put(note)
+  if (selected === note.id) {
+    // Preserve focus and selection if text has not changed.
+    if ($('body').value !== note.text) $('body').value = note.text
+    $('saved').textContent = note.dirty ? 'На устройстве' : 'Синхронизировано'
+  }
+}
+async function sync(automatic = false) {
+  if (!token) { if (!automatic) openSettings(); return }
   if (busy) return
-  persistEditor(); busy = true; document.querySelector('.shell').inert = true; $('status').textContent = 'Синхронизация…'
-  let conflicts = 0
+  if (automatic && !autoEnabled) return
+  try { persistEditor() } catch(e) {
+    if (automatic) {
+      $('status').textContent = 'Автообмен отложен: не сохранён текст'
+      requestAuto(AUTO_POLL)
+    } else report(e)
+    return
+  }
+  clearTimeout(autoTimer); autoTimer = null
+  busy = true; exchangeActive = true
+  if (!automatic) document.querySelector('.shell').inert = true
+  $('status').textContent = automatic ? 'Автосинхронизация…' : 'Синхронизация…'
+  let conflicts = 0, deferred = false, ok = false
+  const generation = autoGeneration
+  const checkpoint = () => {
+    if (automatic && (!autoEnabled || generation !== autoGeneration)) throw Object.assign(Error('Автообмен выключен'),{cancelled:true})
+    persistEditor()
+  }
   try {
     const {notes:remote, deleted = []} = await api('/api/notes')
+    checkpoint()
+    const deletedIds = new Set(deleted.map(n=>n.id))
     for (const item of deleted) {
       const local = notes.get(item.id)
       if (!local) continue
+      // Do not replace or close an open editor in the automatic mode.
+      if (automatic && selected === item.id) { deferred = true; continue }
       if (local.dirty) {
         create(local.text)
         conflicts++
@@ -200,23 +262,72 @@ async function sync() {
       if (selected === item.id) { selected = null; $('reader').hidden = true }
     }
     const byId = new Map(remote.map(n => [n.id,n]))
-    for (const n of [...notes.values()]) {
-      if (!n.dirty) continue
-      const r = byId.get(n.id)
-      if (r && r.text !== n.text && r.revision !== n.base) {
-        const copy = '# Конфликт · ' + title(n) + '\n\n' + n.text
-        create(new Blob([copy]).size > 512*1024 ? n.text : copy)
-        put({id:r.id,text:r.text,base:r.revision,dirty:false}); conflicts++; continue
+    const ids = new Set([...notes.keys(), ...byId.keys()])
+    for (const id of ids) {
+      if (deletedIds.has(id)) continue
+      checkpoint()
+      const n = notes.get(id)
+      const r = byId.get(id)
+      if (r && !n) { applySynced({id:r.id,text:r.text,base:r.revision,dirty:false}); continue }
+      if (!n) continue
+      if (r && r.text === n.text) {
+        if (n.dirty || n.base !== r.revision) applySynced({id,text:n.text,base:r.revision,dirty:false})
+        continue
       }
-      const result = await api('/api/notes/'+n.id,'PUT',{text:n.text,base:n.base})
-      put({...n,base:result.revision,dirty:false}); byId.delete(n.id)
+      if (r && (!n.dirty || r.revision !== n.base)) {
+        if (automatic && selected === id) { deferred = true; continue }
+        if (n.dirty) {
+          const copy = '# Конфликт · ' + title(n) + '\n\n' + n.text
+          create(new Blob([copy]).size > 512*1024 ? n.text : copy)
+          conflicts++
+        }
+        applySynced({id,text:r.text,base:r.revision,dirty:false})
+        continue
+      }
+      if (!n.dirty) continue
+      // Keep the submitted value separate: the editor can change while PUT is in flight.
+      const sentText = n.text, sentBase = n.base
+      const result = await api('/api/notes/'+id,'PUT',{text:sentText,base:sentBase})
+      checkpoint()
+      const latest = notes.get(id)
+      if (latest) {
+        applySynced({...latest,base:result.revision,dirty:latest.text !== sentText})
+      }
     }
-    for (const r of byId.values()) put({id:r.id,text:r.text,base:r.revision,dirty:false})
-    $('status').textContent = conflicts ? 'Конфликтов: ' + conflicts : 'Синхронизировано'
-    if (conflicts) alertText('Сохранены обе версии','Ваш текст в заметке «Конфликт». Проверьте его и нажмите синхронизацию ещё раз.')
-  } catch(e) { $('status').textContent = 'Синхронизация прервана'; report(e) }
-  finally { busy = false; document.querySelector('.shell').inert = false; select(selected) }
+    ok = true; autoFailures = 0; autoAuthBlocked = false; autoNotBefore = 0
+    const pending = [...notes.values()].some(n=>n.dirty)
+    $('status').textContent = conflicts ? 'Конфликтов: ' + conflicts :
+      deferred ? 'Есть изменения на сервере · закройте редактор для получения' :
+      pending ? 'Локальные изменения ожидают отправки' : 'Синхронизировано'
+    if (conflicts && !automatic) alertText('Сохранены обе версии','Ваш текст в заметке «Конфликт». Проверьте его и нажмите синхронизацию ещё раз.')
+  } catch(e) {
+    if (automatic) {
+      autoAuthBlocked = e.status === 401
+      if (!e.cancelled) {
+        autoFailures = Math.min(autoFailures+1,5)
+        autoNotBefore = Date.now() + Math.min(15000 * 2 ** autoFailures, 300000)
+      }
+      $('status').textContent = e.cancelled ? (autoEnabled ? 'Автообмен ожидает запуска' : 'Автообмен выключен') :
+        autoAuthBlocked ? 'Проверьте ключ сервера' : 'Автообмен отложен · локальные изменения сохранены'
+    } else {
+      $('status').textContent = 'Синхронизация прервана'
+      if (e.status === 401) autoAuthBlocked = true
+      report(e)
+    }
+  } finally {
+    busy = false; exchangeActive = false
+    document.querySelector('.shell').inert = false
+    // Never reload the open textarea after an automatic exchange.
+    if (automatic) render()
+    else select(selected)
+    if (autoEnabled && token && !autoAuthBlocked) {
+      const pending = [...notes.values()].some(n=>n.dirty)
+      requestAuto(ok ? deferred ? 30000 : pending ? AUTO_DELAY : AUTO_POLL :
+        Math.min(15000 * 2 ** autoFailures, 300000))
+    }
+  }
 }
+
 // History is the server's saved revisions, not a substitute for offline draft storage.
 async function openServerArchive(kind, id = null) {
   if (busy) return
@@ -364,9 +475,31 @@ function start() {
     }
     if ($('settings').returnValue !== 'save') return
     token = $('key').value.trim(); localStorage.setItem('moroshka.key',token); sessionStorage.removeItem('moroshka.key')
-    if (token) sync(); else $('status').textContent = 'На этом устройстве'
+    autoAuthBlocked = false; autoFailures = 0; autoNotBefore = 0
+    if (token) sync(); else { clearTimeout(autoTimer); autoTimer = null; $('status').textContent = 'На этом устройстве' }
   })
   $('sync').onclick = () => sync().catch(report)
+  $('auto-sync').checked = autoEnabled
+  $('auto-sync').onchange = () => {
+    if ($('auto-sync').checked && !token) {
+      $('auto-sync').checked = false
+      alertText('Подключите сервер','Автообмен можно включить после подключения.')
+      return
+    }
+    try { setAuto($('auto-sync').checked) }
+    catch(e) { $('auto-sync').checked = autoEnabled; report(e) }
+  }
+  window.addEventListener('online', () => {
+    autoNotBefore = 0; autoFailures = 0
+    if (autoEnabled) requestAuto(AUTO_DELAY)
+  })
+  window.addEventListener('offline', () => {
+    if (autoEnabled && !busy) $('status').textContent = 'Офлайн · локальные заметки сохранены'
+  })
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestAuto(AUTO_DELAY)
+  })
+  requestAuto(AUTO_DELAY)
   $('export').onclick = () => {
     const a = document.createElement('a'); const url = URL.createObjectURL(new Blob([$('body').value],{type:'text/markdown'}))
     a.href = url; a.download = title(notes.get(selected)).replace(/[^\p{L}\p{N} _-]/gu,'_').slice(0,100)+'.md'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000)

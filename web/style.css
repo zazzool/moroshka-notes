@@ -97,3 +97,7 @@ details{margin:18px 0}summary{cursor:pointer;min-height:48px;padding:12px 0}deta
 #archive-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:35vh;overflow:auto;padding:16px;border-radius:16px;background:var(--bg);font:14px/1.6 Manrope,system-ui,sans-serif}
 #server-archive .row{margin-top:10px}
 @media(max-width:680px){.trash-action{grid-column:1/-1;text-align:center}}
+
+.auto-sync-control{display:flex;align-items:center;gap:8px;min-height:48px;font-size:13px;color:var(--ink);cursor:pointer}
+.auto-sync-control input{width:22px;height:22px;flex:none;accent-color:var(--accent)}
+@media(max-width:680px){.auto-sync-control{flex-basis:100%}}

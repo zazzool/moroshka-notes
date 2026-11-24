@@ -7,7 +7,7 @@
 <nav aria-label="Библиотека"><button class="nav-notes" data-view="notes" aria-current="page">Заметки</button><button class="nav-tasks" data-view="tasks">Задачи</button></nav>
 <details class="archive-menu"><summary>Резервные копии</summary><p>Все сохранённые заметки в одном JSON. Без ключей подключения; текст не зашифрован.</p><button id="backup-export">Сохранить архив</button><button id="backup-import">Восстановить из архива</button><input id="backup-file" type="file" accept=".json,application/json" hidden></details>
 <button id="trash" class="trash-action">Корзина сервера</button>
-<div class="connection"><span id="status" role="status">На этом устройстве</span><button id="connect">Подключение</button><button id="sync">Синхронизировать</button></div></aside>
+<div class="connection"><span id="status" role="status">На этом устройстве</span><button id="connect">Подключение</button><button id="sync">Синхронизировать</button><label class="auto-sync-control"><input type="checkbox" id="auto-sync"> Автосинхронизация</label></div></aside>
 <main><div class="top"><span>Моя библиотека</span><button id="import">Импорт .md</button><input id="file" type="file" accept=".md,text/markdown,text/plain" multiple hidden></div>
 <div class="hero"><strong>Мысли в знания,<br>идеи в проекты</strong></div>
 <form id="capture" class="composer">
