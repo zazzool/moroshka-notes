@@ -1,0 +1,70 @@
+{
+  "source": "docs/design/assets",
+  "description": "Optimized web runtime artwork, local font and icons; included in server allowlist and offline cache.",
+  "copies": [
+    {
+      "source": "docs/design/assets/raster/brand/app-icon-192.png",
+      "path": "web/icon.png"
+    },
+    {
+      "source": "docs/design/assets/raster/brand/cloudberry-3d.webp",
+      "path": "web/assets/cloudberry.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/backgrounds/cloudberry-landscape-landscape.webp",
+      "path": "web/assets/hero-day.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/backgrounds/starry-night-landscape.webp",
+      "path": "web/assets/hero-night.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/idea-tree.webp",
+      "path": "web/assets/ideas.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/knowledge-book.webp",
+      "path": "web/assets/knowledge.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/brain-glow.webp",
+      "path": "web/assets/search.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/balance-stones.webp",
+      "path": "web/assets/balance.webp"
+    },
+    {
+      "source": "docs/design/assets/fonts/Manrope-Variable.ttf",
+      "path": "web/assets/manrope.ttf"
+    },
+    {
+      "source": "docs/design/assets/fonts/OFL.txt",
+      "path": "web/assets/manrope-OFL.txt"
+    },
+    {
+      "source": "docs/design/assets/icons/note.svg",
+      "path": "web/assets/note.svg"
+    },
+    {
+      "source": "docs/design/assets/icons/checkbox.svg",
+      "path": "web/assets/checkbox.svg"
+    },
+    {
+      "source": "docs/design/assets/icons/search.svg",
+      "path": "web/assets/search.svg"
+    },
+    {
+      "source": "docs/design/assets/icons/link.svg",
+      "path": "web/assets/link.svg"
+    },
+    {
+      "source": "docs/design/assets/icons/sparkles.svg",
+      "path": "web/assets/sparkles.svg"
+    },
+    {
+      "source": "docs/design/assets/icons/folder.svg",
+      "path": "web/assets/folder.svg"
+    }
+  ]
+}

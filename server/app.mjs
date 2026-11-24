@@ -6,7 +6,22 @@ import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
 
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']], ['/app.js', ['app.js', 'text/javascript']],
-  ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']]
+  ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
+  ['/assets/cloudberry.webp', ['assets/cloudberry.webp', 'image/webp']],
+  ['/assets/hero-day.webp', ['assets/hero-day.webp', 'image/webp']],
+  ['/assets/hero-night.webp', ['assets/hero-night.webp', 'image/webp']],
+  ['/assets/ideas.webp', ['assets/ideas.webp', 'image/webp']],
+  ['/assets/knowledge.webp', ['assets/knowledge.webp', 'image/webp']],
+  ['/assets/search.webp', ['assets/search.webp', 'image/webp']],
+  ['/assets/balance.webp', ['assets/balance.webp', 'image/webp']],
+  ['/assets/manrope.ttf', ['assets/manrope.ttf', 'font/ttf']],
+  ['/assets/manrope-OFL.txt', ['assets/manrope-OFL.txt', 'text/plain; charset=utf-8']],
+  ['/assets/note.svg', ['assets/note.svg', 'image/svg+xml; charset=utf-8']],
+  ['/assets/checkbox.svg', ['assets/checkbox.svg', 'image/svg+xml; charset=utf-8']],
+  ['/assets/search.svg', ['assets/search.svg', 'image/svg+xml; charset=utf-8']],
+  ['/assets/link.svg', ['assets/link.svg', 'image/svg+xml; charset=utf-8']],
+  ['/assets/sparkles.svg', ['assets/sparkles.svg', 'image/svg+xml; charset=utf-8']],
+  ['/assets/folder.svg', ['assets/folder.svg', 'image/svg+xml; charset=utf-8']]
 ])
 const hash = value => createHash('sha256').update(value).digest()
 function json(res, status, body) {

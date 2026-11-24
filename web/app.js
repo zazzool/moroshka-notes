@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
+const captureKey = 'moroshka.captureDraft'
 const notes = new Map()
 let selected, view = 'notes', dirtyEditor = false, busy = false
 let token = localStorage.getItem('moroshka.key') || sessionStorage.getItem('moroshka.key') || ''
@@ -57,7 +58,23 @@ function related() {
     group.append(block)
   }
 }
+function tagsOf(text) {
+  const tags = new Set()
+  let fence = null
+  for (const line of text.split('\n')) {
+    const marker = line.trimStart().match(/^(\x60{3,}|~{3,})/)?.[1]
+    if (marker) {
+      if (!fence) fence = marker
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null
+      continue
+    }
+    if (fence || /^\s*#\s/.test(line)) continue
+    for (const match of line.matchAll(/(?<!\S)#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,39})(?![\p{L}\p{N}_-])/gu)) tags.add(match[1])
+  }
+  return [...tags]
+}
 function render() {
+  $('capture').hidden = view !== 'notes'
   const list = $('items'); list.replaceChildren()
   const q = norm($('search').value)
   let count = 0
@@ -66,7 +83,17 @@ function render() {
     if (view === 'notes') {
       const b = action('', () => select(n.id)); b.className = 'note'
       if (n.id === selected) b.setAttribute('aria-current','true')
-      b.append(el('strong',title(n)), el('small',n.text.split('\n').filter(l => l.trim() && !l.startsWith('# ')).join(' ') || 'Markdown'))
+      const symbol = el('span','','note-symbol'); symbol.setAttribute('aria-hidden','true')
+      const body = el('span','','note-body')
+      body.append(el('strong',title(n)), el('small',n.text.split('\n').filter(l => l.trim() && !l.startsWith('# ')).join(' ') || 'Markdown'))
+      const tags = tagsOf(n.text)
+      if (tags.length) {
+        const group = el('span','','note-tags')
+        for (const tag of tags.slice(0,5)) group.append(el('span','#'+tag,'chip'))
+        if (tags.length > 5) group.append(el('span','+'+(tags.length-5),'chip'))
+        body.append(group)
+      }
+      b.append(symbol,body)
       list.append(b); count++
     } else {
       n.text.split('\n').forEach((line,i) => {
@@ -87,6 +114,10 @@ function render() {
   $('count').textContent = count
   if (!count) {
     const box = el('div','','empty')
+    const art = document.createElement('img')
+    art.src = q ? '/assets/search.webp' : view === 'tasks' ? '/assets/balance.webp' : '/assets/ideas.webp'
+    art.alt = ''; art.loading = 'lazy'; art.className = 'empty-art'
+    box.append(art)
     box.append(el('h2',q ? 'Совпадений нет' : view === 'tasks' ? 'Задач пока нет' : 'Первая заметка'),
       el('p',q ? 'Попробуйте другое слово или тег.' : view === 'tasks' ? 'Строки вида «- [ ] Прочитать статью» появятся здесь.' : 'Запишите мысль. Добавьте [[ссылку]], чтобы связать её с другой заметкой.'))
     if (!q && view === 'notes') box.append(action('Создать заметку',newNote))
@@ -186,6 +217,36 @@ function start() {
     const n = JSON.parse(localStorage.getItem(k)); notes.set(n.id,n)
   }
   $('new').onclick = () => { try { newNote() } catch(e) { report(e) } }
+  const capture = $('capture-text')
+  capture.value = localStorage.getItem(captureKey) || ''
+  let unsavedCapture = false
+  capture.oninput = () => {
+    try {
+      localStorage.setItem(captureKey, capture.value)
+      unsavedCapture = false
+      $('capture-status').textContent = 'Черновик на устройстве'
+    } catch(e) {
+      unsavedCapture = true
+      $('capture-status').textContent = 'Не удалось сохранить черновик: ' + e.message
+    }
+  }
+  $('capture').onsubmit = event => {
+    event.preventDefault()
+    const original = capture.value
+    if (!original.trim()) { capture.focus(); return }
+    try {
+      persistEditor()
+      const heading = original.split('\n').find(line => line.trim()).trim().replace(/^# /,'').slice(0,80).trim() || 'Новая заметка'
+      const n = create('# ' + heading + '\n\n' + original)
+      localStorage.removeItem(captureKey)
+      capture.value = ''; unsavedCapture = false
+      $('capture-status').textContent = 'Заметка сохранена'
+      select(n.id)
+    } catch(e) { report(e) }
+  }
+  window.addEventListener('beforeunload', event => {
+    if (unsavedCapture) { event.preventDefault(); event.returnValue = '' }
+  })
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
     select(null); view = b.dataset.view; document.querySelector('[aria-current="page"]')?.removeAttribute('aria-current')
     b.setAttribute('aria-current','page'); $('heading').textContent = b.textContent; render()

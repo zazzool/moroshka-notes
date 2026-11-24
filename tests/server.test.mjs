@@ -108,3 +108,14 @@ test('pairing rejects cross-origin requests and supports cancellation', async t 
   assert.equal((await api('/pair/cancel','POST',{code,secret},'')).status,200)
   assert.equal((await api('/pair/approve','POST',{code})).status,404)
 })
+
+test('approved visual assets are served without authentication using the correct MIME type', async t => {
+  const { origin } = await fixture(t)
+  for (const [path, mime] of [["/assets/cloudberry.webp","image/webp"],["/assets/hero-day.webp","image/webp"],["/assets/hero-night.webp","image/webp"],["/assets/ideas.webp","image/webp"],["/assets/knowledge.webp","image/webp"],["/assets/search.webp","image/webp"],["/assets/balance.webp","image/webp"],["/assets/manrope.ttf","font/ttf"],["/assets/manrope-OFL.txt","text/plain; charset=utf-8"],["/assets/note.svg","image/svg+xml; charset=utf-8"],["/assets/checkbox.svg","image/svg+xml; charset=utf-8"],["/assets/search.svg","image/svg+xml; charset=utf-8"],["/assets/link.svg","image/svg+xml; charset=utf-8"],["/assets/sparkles.svg","image/svg+xml; charset=utf-8"],["/assets/folder.svg","image/svg+xml; charset=utf-8"]]) {
+    const res = await fetch(origin + path)
+    assert.equal(res.status, 200, path)
+    assert.equal(res.headers.get('content-type'), mime, path)
+    assert.ok((await res.arrayBuffer()).byteLength > 0, path)
+  }
+  assert.equal((await fetch(origin + '/assets/not-a-file.webp')).status, 404)
+})
