@@ -1,5 +1,6 @@
 """End-to-end check with Python Playwright and Chromium. No production dependencies."""
 import os
+import json
 import secrets
 import subprocess
 import tempfile
@@ -19,6 +20,51 @@ def connect(page):
     expect(page.locator("#status")).to_have_text("Синхронизировано")
 
 
+def backup_check(origin, browser):
+    first = browser.new_context(accept_downloads=True)
+    page = first.new_page()
+    page.goto(origin)
+    page.get_by_role("button", name="Создать заметку").click()
+    original = "# Архив\n\n[[Лес]]\n- [ ] Задача"
+    page.get_by_label("Markdown").fill(original)
+    page.get_by_role("button", name="Закрыть редактор").click()
+    page.get_by_text("Резервные копии", exact=True).click()
+    with page.expect_download() as info:
+        page.get_by_role("button", name="Сохранить архив").click()
+    content = info.value.path().read_bytes()
+    payload = json.loads(content)
+    assert payload["format"] == "moroshka-notes-backup"
+    assert payload["notes"][0]["text"] == original
+    assert set(payload["notes"][0]) == {"id", "text", "sha256"}
+    # Divergent revision: never overwrite. Repeated import is idempotent.
+    page.locator("#items button").filter(has_text="Архив").click()
+    page.get_by_label("Markdown").fill("# Архив\n\nНовая правка")
+    page.get_by_role("button", name="Закрыть редактор").click()
+    page.evaluate("navigator.serviceWorker.ready")
+    first.set_offline(True)
+    page.reload()
+    page.get_by_text("Резервные копии", exact=True).click()
+    def restore(bytes_):
+        page.locator("#backup-file").set_input_files({"name": "backup.json", "mimeType": "application/json", "buffer": bytes_})
+    restore(content)
+    expect(page.locator("#msgTitle")).to_have_text("Архив восстановлен")
+    expect(page.locator("#msgText")).to_contain_text("Добавлено: 1. Уже есть: 0. Конфликтных копий: 1.")
+    page.get_by_role("button", name="Закрыть", exact=True).click()
+    expect(page.locator("#items .note")).to_have_count(2)
+    restore(content)
+    expect(page.locator("#msgText")).to_contain_text("Добавлено: 0. Уже есть: 1.")
+    page.get_by_role("button", name="Закрыть", exact=True).click()
+    expect(page.locator("#items .note")).to_have_count(2)
+    corrupted = json.loads(content)
+    corrupted["notes"][0]["text"] = "Повреждено"
+    restore(json.dumps(corrupted).encode("utf-8"))
+    expect(page.locator("#msgText")).to_contain_text("Контрольная сумма")
+    page.get_by_role("button", name="Закрыть", exact=True).click()
+    expect(page.locator("#items .note")).to_have_count(2)
+    assert page.locator("#items").inner_text().find("Новая правка") >= 0
+    first.close()
+
+
 def check(origin):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
@@ -36,6 +82,7 @@ def check(origin):
         expect(preview.get_by_label("Markdown")).to_have_value("# Мысль для проверки #дизайн\n\nМысль для проверки #дизайн")
         assert preview.evaluate("document.fonts.load('16px Manrope').then(fs => fs.length > 0 && fs.every(f => f.status === 'loaded'))")
         design.close()
+        backup_check(origin, browser)
         first, second = browser.new_context(), browser.new_context(viewport={"width": 390, "height": 840})
         a, b = first.new_page(), second.new_page()
         a.goto(origin)
