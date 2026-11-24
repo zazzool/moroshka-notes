@@ -175,10 +175,31 @@ class SmokeRunner : Instrumentation() {
             HttpsURLConnection.setDefaultSSLSocketFactory(original)
         }
     }
+    private fun backupFixture(): String {
+        val id = "11111111-1111-1111-1111-111111111111"
+        val original = Note(id, "# Архив\n\n[[Лес]]\n- [ ] Задача")
+        val archive = BackupArchive.encode(listOf(original))
+        val verified = BackupArchive.decode(archive)
+        check(verified.single().note == original)
+        val current = Note(id, "# Новая правка")
+        val plan = BackupArchive.plan(verified, listOf(current))
+        check(plan.additions.size == 1 && plan.conflicts == 1)
+        check(plan.additions.single().text == original.text && plan.additions.single().id != id)
+        val repeated = BackupArchive.plan(verified, listOf(current) + plan.additions)
+        check(repeated.additions.isEmpty() && repeated.skipped == 1)
+        check(BackupArchive.plan(verified, emptyList(), setOf(id)).additions.single().id != id)
+        val tampered = org.json.JSONObject(String(archive, Charsets.UTF_8))
+        tampered.getJSONArray("notes").getJSONObject(0).put("text", "corrupted")
+        check(runCatching { BackupArchive.decode(tampered.toString().toByteArray()) }.isFailure)
+        check(runCatching { BackupArchive.encode(listOf(original, original)) }.isFailure)
+        return "Portable-backup-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
             if (args.containsKey("designFixture")) return@runCatching designFixture()
+            if (args.containsKey("backupFixture")) return@runCatching backupFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)

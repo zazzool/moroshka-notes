@@ -45,6 +45,25 @@ class Vault(context: Context) {
         if (withBackup) backup.save(note)
         return note
     }
+    /** Add-only import; previously deleted IDs are not reused. Retrying is safe. */
+    fun restoreArchive(bytes: ByteArray): BackupArchive.Result {
+        val entries = BackupArchive.decode(bytes)
+        val deletedIds = trash.listFiles().orEmpty().map { it.name.removeSuffix(".md") }
+            .filter { validId.matches(it) }.toSet()
+        val plan = BackupArchive.plan(entries, all(), deletedIds)
+        var added = 0
+        for (note in plan.additions) {
+            try {
+                save(note)
+                added++
+            } catch (error: Exception) {
+                throw IllegalStateException("Импорт прерван после $added записей. Существующие заметки не заменены. " +
+                    "Повторите импорт после устранения ошибки: " + (error.message ?: "Ошибка записи"), error)
+            }
+        }
+        return BackupArchive.Result(added, plan.skipped, plan.conflicts)
+    }
+
     fun remove(ids: Collection<String>) {
         for (id in ids) {
             val note = read(id)

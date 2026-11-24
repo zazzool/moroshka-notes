@@ -499,16 +499,52 @@ class MainActivity : Activity() {
         }
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
             else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
             else if (index == 2) deleteNotes()
             else if (index == 3) pairDevice()
             else if (index == 4) installServer()
-            else connection()
+            else if (index == 5) connection()
+            else if (index == 6) {
+                if (captureDraft.isNotBlank()) notice("Сначала сохраните черновик на главной. В архив входят только сохранённые заметки.")
+                else AlertDialog.Builder(this).setMessage("Архив содержит все сохранённые заметки в открытом виде. Ключи и настройки подключения не включены. Храните файл в безопасном месте.")
+                    .setNegativeButton("Отмена", null)
+                    .setPositiveButton("Выбрать файл") { _, _ ->
+                        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json")
+                            .addCategory(Intent.CATEGORY_OPENABLE)
+                            .putExtra(Intent.EXTRA_TITLE, "Moroshka-backup.json"), 6)
+                    }.show()
+            } else {
+                AlertDialog.Builder(this).setMessage("Восстановление добавит заметки. Существующие записи не будут перезаписаны; конфликтующие версии сохранятся отдельно.")
+                    .setNegativeButton("Отмена", null)
+                    .setPositiveButton("Выбрать архив") { _, _ ->
+                        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
+                            .addCategory(Intent.CATEGORY_OPENABLE), 7)
+                    }.show()
+            }
         }.show()
     }
+
+    private fun archiveWork(message: String, operation: () -> String) {
+        flush()
+        syncing = true
+        root.removeAllViews()
+        root.addView(label(message, 22f))
+        worker.execute {
+            val result = runCatching(operation)
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                syncing = false
+                library()
+                val shared = pendingShare
+                if (shared != null) { pendingShare = null; safely { edit(vault.create(shared)) } }
+                result.onSuccess { notice(it) }.onFailure { notice(it.message ?: "Не удалось обработать архив") }
+            }
+        }
+    }
+
     private fun deleteNotes() {
         val notes = vault.all()
         if (notes.isEmpty()) return notice("Нет заметок для удаления.")
@@ -935,6 +971,20 @@ class MainActivity : Activity() {
                 DocumentBackup(this).connect(uri, vault)
                 library()
                 notice("Папка подключена. Новые версии заметок будут сохраняться в ней. После переустановки выберите эту папку снова.")
+            } else if (requestCode == 6) {
+                archiveWork("Сохранение архива…") {
+                    val notes = vault.all()
+                    val bytes = BackupArchive.encode(notes)
+                    requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { it.write(bytes); it.flush() }
+                    "Архив сохранён. Заметок: " + notes.size
+                }
+            } else if (requestCode == 7) {
+                archiveWork("Восстановление архива…") {
+                    val bytes = requireNotNull(contentResolver.openInputStream(uri)).use { BackupArchive.read(it) }
+                    val result = vault.restoreArchive(bytes)
+                    "Добавлено: " + result.added + ". Уже есть: " + result.skipped +
+                        ". Конфликтных копий: " + result.conflicts + "."
+                }
             } else if (requestCode == 1) {
                 val bytes = requireNotNull(contentResolver.openInputStream(uri)).use { input ->
                     val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192)

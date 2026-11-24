@@ -6,6 +6,7 @@ import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
 
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']], ['/app.js', ['app.js', 'text/javascript']],
+  ['/backup.mjs', ['backup.mjs', 'text/javascript']],
   ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
   ['/assets/cloudberry.webp', ['assets/cloudberry.webp', 'image/webp']],
   ['/assets/hero-day.webp', ['assets/hero-day.webp', 'image/webp']],

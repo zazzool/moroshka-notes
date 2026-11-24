@@ -1,3 +1,5 @@
+import { encodeArchive, decodeArchive, planRestore, maxArchiveBytes } from '/backup.mjs'
+
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
 const captureKey = 'moroshka.captureDraft'
@@ -212,6 +214,22 @@ async function sync() {
   } catch(e) { $('status').textContent = 'Синхронизация прервана'; report(e) }
   finally { busy = false; document.querySelector('.shell').inert = false; select(selected) }
 }
+async function archiveOperation(operation) {
+  if (busy) return
+  try { persistEditor() } catch(e) { report(e); return }
+  busy = true
+  document.querySelector('.shell').inert = true
+  try { await operation() } catch(e) { report(e) }
+  finally { busy = false; document.querySelector('.shell').inert = false; render() }
+}
+function downloadArchive(bytes) {
+  const a = document.createElement('a')
+  const url = URL.createObjectURL(new Blob([bytes], {type:'application/json'}))
+  a.href = url
+  a.download = 'Moroshka-backup-' + new Date().toISOString().slice(0,10) + '.json'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 function start() {
   for (const k of Object.keys(localStorage).filter(k => k.startsWith(prefix))) {
     const n = JSON.parse(localStorage.getItem(k)); notes.set(n.id,n)
@@ -275,6 +293,28 @@ function start() {
   $('export').onclick = () => {
     const a = document.createElement('a'); const url = URL.createObjectURL(new Blob([$('body').value],{type:'text/markdown'}))
     a.href = url; a.download = title(notes.get(selected)).replace(/[^\p{L}\p{N} _-]/gu,'_').slice(0,100)+'.md'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000)
+  }
+  $('backup-export').onclick = () => {
+    if ($('capture-text').value.trim()) return alertText('Сохраните черновик','В архив входят только сохранённые заметки.')
+    return archiveOperation(async () => downloadArchive(await encodeArchive(notes.values())))
+  }
+  $('backup-import').onclick = () => $('backup-file').click()
+  $('backup-file').onchange = async () => {
+    const file = $('backup-file').files[0]
+    $('backup-file').value = ''
+    if (!file) return
+    await archiveOperation(async () => {
+      if (file.size > maxArchiveBytes) throw Error('Архив больше 32 МиБ')
+      const verified = await decodeArchive(new Uint8Array(await file.arrayBuffer()))
+      const plan = await planRestore(verified, notes)
+      let added = 0
+      for (const n of plan.additions) {
+        try { put({...n,base:null,dirty:true}); added++ }
+        catch(e) { throw Error('Импорт прерван после ' + added + ' записей. Существующие заметки не заменены. Повторите импорт после освобождения места: ' + e.message) }
+      }
+      select(null)
+      alertText('Архив восстановлен', 'Добавлено: ' + added + '. Уже есть: ' + plan.skipped + '. Конфликтных копий: ' + plan.conflicts + '.')
+    })
   }
   $('import').onclick = () => $('file').click()
   $('file').onchange = async () => {
