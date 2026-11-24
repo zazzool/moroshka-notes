@@ -94,7 +94,7 @@ class Vault(context: Context) {
         BackupArchive.Result(added, plan.skipped, plan.conflicts)
     }
 
-    fun remove(ids: Collection<String>) = synchronized(writeLock) {
+    fun remove(ids: Collection<String>): Unit = synchronized(writeLock) {
         for (id in ids) {
             val note = read(id)
             backup.remove(note, bases.getString(id, null))
@@ -102,7 +102,7 @@ class Vault(context: Context) {
             check(!destination.exists() && File(dir, id + ".md").renameTo(destination)) { "Не удалось переместить заметку в корзину" }
         }
     }
-    fun restoreDeleted(note: Note, base: String?) = synchronized(writeLock) {
+    fun restoreDeleted(note: Note, base: String?): Unit = synchronized(writeLock) {
         require(validId.matches(note.id))
         val destination = File(trash, note.id + ".md")
         if (!destination.exists()) {

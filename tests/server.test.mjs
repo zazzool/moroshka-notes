@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -162,4 +162,18 @@ test('history archives unique previous revisions and never archives rejected wri
   assert.deepEqual(live.notes,[{id:restored,text:second,revision:b}])
   assert.deepEqual(live.deleted,[{id,revision:b}])
   assert.equal((await api(history+'/'+a)).status,200)
+})
+
+
+test('corrupted archived revision blocks a replacement and leaves live note unchanged', async t => {
+  const {api,dir}=await fixture(t), id=randomUUID(), path='/api/notes/'+id
+  const text='# First', second='# Second'
+  const a=digest(text), b=digest(second)
+  assert.equal((await api(path,'PUT',{text,base:null})).status,200)
+  assert.equal((await api(path,'PUT',{text:second,base:a})).status,200)
+  assert.equal((await api(path,'PUT',{text,base:b})).status,200)
+  writeFileSync(join(dir,'history',id,a+'.md'),'corrupted')
+  assert.equal((await api('/api/history/'+id+'/'+a)).status,500)
+  assert.equal((await api(path,'PUT',{text:'# Third',base:a})).status,500)
+  assert.equal(readFileSync(join(dir,id+'.md'),'utf8'),text)
 })
