@@ -1,0 +1,10 @@
+<resources>
+    <style name="MoroshkaTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#79518C</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#FCF5F2</item>
+        <item name="android:navigationBarColor">#FCF5F2</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

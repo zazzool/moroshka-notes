@@ -28,6 +28,7 @@ class Vault(context: Context) {
     fun all() = dir.listFiles().orEmpty().map { it.name.removeSuffix(".bak") }
         .filter { it.endsWith(".md") && validId.matches(it.removeSuffix(".md")) }
         .distinct().map { read(it.removeSuffix(".md")) }.sortedBy { it.title.lowercase() }
+    fun recent(): List<Note> = all().sortedByDescending { File(dir, it.id + ".md").lastModified() }
     fun create(text: String, withBackup: Boolean = true) = save(Note(UUID.randomUUID().toString(), text), withBackup)
     fun save(note: Note, withBackup: Boolean = true): Note {
         val bytes = note.text.toByteArray(Charsets.UTF_8)

@@ -8,11 +8,8 @@ import android.location.LocationManager
 import android.location.Geocoder
 import java.util.Locale
 import android.speech.RecognizerIntent
-import java.text.DateFormat
-import java.util.Date
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
@@ -40,6 +37,10 @@ class MainActivity : Activity() {
     private var pendingShare: String? = null
     private var exportId: String? = null
     private var placeField: AutoCompleteTextView? = null
+    private val design by lazy { Design(this) }
+    private val drafts by lazy { getSharedPreferences("capture_draft", MODE_PRIVATE) }
+    private var captureDraft = ""
+    private var page = "home"
     private var search = ""
     private var tasks = false
     private val autoSave = Runnable { safely { flush() } }
@@ -47,13 +48,20 @@ class MainActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         vault = Vault(this)
+        captureDraft = drafts.getString("text", "").orEmpty()
+        page = state?.getString("page") ?: "home"
         root = column()
-        root.setBackgroundColor(Color.rgb(249,249,242))
+        root.setBackgroundColor(design.background)
         root.setPadding(dp(16), dp(8), dp(16), dp(8))
         root.setOnApplyWindowInsetsListener { v, insets ->
             v.setPadding(dp(16), dp(8) + insets.systemWindowInsetTop, dp(16), dp(8) + insets.systemWindowInsetBottom)
             insets
         }
+        val night = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = if (night) 0 else
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         setContentView(root)
         exportId = state?.getString("export")
         val restore = state?.getString("note")
@@ -68,35 +76,34 @@ class MainActivity : Activity() {
     }
     override fun onPause() { safely { flush() }; super.onPause() }
     override fun onSaveInstanceState(out: Bundle) {
-        super.onSaveInstanceState(out); out.putString("note", current); out.putString("export", exportId)
+        super.onSaveInstanceState(out); out.putString("note", current); out.putString("export", exportId); out.putString("page", page)
     }
     override fun onDestroy() { handler.removeCallbacks(autoSave); worker.shutdown(); super.onDestroy() }
     @Deprecated("Activity back navigation")
     override fun onBackPressed() {
         if (syncing) return
-        if (current == null) super.onBackPressed() else safely { flush(); library() }
+        if (current != null) safely { flush(); library() }
+        else if (page != "home") { page = "home"; library() }
+        else super.onBackPressed()
     }
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun label(text: String, size: Float) = TextView(this).apply {
-        this.text = text; textSize = size; setTextColor(Color.rgb(38,65,52))
-        if (size >= 22) typeface = Typeface.SERIF
+        this.text = text; textSize = size; setTextColor(design.text)
+        if (size >= 18) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
-    private fun surface(color: Int, radius: Int = 18) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = dp(radius).toFloat()
-    }
-    private val ink = Color.rgb(37, 65, 53)
-    private val muted = Color.rgb(102, 119, 103)
-    private val pale = Color.rgb(235, 239, 227)
+    private val ink get() = design.text
+    private val muted get() = design.muted
+    private val pale get() = design.tint
     private fun button(text: String, action: () -> Unit) = Button(this).apply {
         this.text = text
         isAllCaps = false
         textSize = 14f
         setTextColor(ink)
-        background = surface(pale)
+        background = design.panel(pale, 16)
         minHeight = dp(48)
+        stateListAnimator = null
         setPadding(dp(14), 0, dp(14), 0)
         setOnClickListener { safely(action) }
     }
@@ -116,96 +123,174 @@ class MainActivity : Activity() {
         if (dirty) { vault.save(Note(requireNotNull(current), requireNotNull(editor).text.toString())); dirty = false }
     }
     private fun library() {
-        current = null; editor = null; root.removeAllViews()
+        current = null
+        editor = null
+        root.removeAllViews()
+        val header = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        header.addView(ImageView(this).apply { setImageResource(R.drawable.berry) }, LinearLayout.LayoutParams(dp(36), dp(36)))
+        header.addView(label("Морошка", 24f).apply { setPadding(dp(10), 0, 0, 0) },
+            LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        header.addView(button("⌕") { page = "search"; library() }.apply {
+            contentDescription = "Поиск"; setPadding(0, 0, 0, 0)
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        header.addView(button("⋯") { menu() }.apply {
+            contentDescription = "Действия библиотеки"; setPadding(0, 0, 0, 0)
+        }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginStart = dp(8) })
+        root.addView(header)
+
+        val content = column()
+        val scroll = ScrollView(this).apply { clipToPadding = false; addView(content) }
+        root.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(16) })
+        when (page) {
+            "home" -> homeContent(content)
+            "search" -> searchContent(content)
+            "links" -> linksContent(content)
+            else -> libraryContent(content)
+        }
+        val nav = row().apply {
+            background = design.panel(design.surface, 20, true)
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+        val items = listOf("home" to "Главная", "search" to "Поиск", "links" to "Связи", "library" to "Библиотека")
+        for ((destination, name) in items) {
+            nav.addView(button(name) { page = destination; library() }.apply {
+                textSize = 13f
+                setPadding(dp(2), dp(4), dp(2), dp(4))
+                minHeight = dp(48)
+                maxLines = 2
+                isSelected = page == destination
+                background = design.panel(if (page == destination) design.tint else design.surface, 16)
+                contentDescription = if (page == destination) "$name, выбранный раздел" else name
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+        root.addView(nav, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+    }
+
+    private fun section(container: LinearLayout, title: String) {
+        container.addView(label(title, 18f), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+            topMargin = dp(20); bottomMargin = dp(10)
+        })
+    }
+
+    private fun homeContent(content: LinearLayout) {
+        val capture = column().apply {
+            background = design.panel(design.surface, 20, true)
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+        }
+        val field = EditText(this).apply {
+            hint = "О чём вы думаете?"
+            contentDescription = "Текст новой заметки"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            gravity = android.view.Gravity.TOP
+            textSize = 16f
+            setTextColor(design.text)
+            setHintTextColor(design.muted)
+            background = design.panel(design.background, 12, true)
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            minLines = 3; maxLines = 7
+            setText(captureDraft)
+        }
+        capture.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        changes(field) {
+            captureDraft = field.text.toString()
+            drafts.edit().putString("text", captureDraft).apply()
+        }
+        val actions = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        actions.addView(button("Голос") { voiceInput(5) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        actions.addView(button("Сохранить") { saveCapture() }.apply {
+            background = design.primary(); setTextColor(Color.WHITE)
+        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        capture.addView(actions, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+        content.addView(capture)
+        if (!DocumentBackup(this).configured) {
+            content.addView(button("Выбрать папку для сохранения") {
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+        }
         if (settings.getString("url", "").isNullOrBlank()) {
-            root.addView(button("Подключить или развернуть сервер") {
+            content.addView(button("Подключить или развернуть сервер") {
                 AlertDialog.Builder(this).setItems(arrayOf("Развернуть свой сервер", "Подключить существующий")) { _, choice ->
                     if (choice == 0) installServer() else connection()
                 }.show()
-            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
         }
-        if (!DocumentBackup(this).configured) {
-            root.addView(button("Выбрать папку для сохранения заметок") {
-                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
-            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(10) })
+        section(content, "Недавние")
+        val recent = vault.recent()
+        if (recent.isEmpty()) content.addView(label("Здесь появится ваша первая заметка.", 16f).apply { setTextColor(muted) })
+        else {
+            recent.take(4).forEach { noteCard(content, it) }
+            content.addView(button("Все заметки") { page = "library"; tasks = false; library() },
+                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
         }
-        val header = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        root.addView(header)
-        val brand = column()
-        brand.addView(label("MOROSHKA", 12f).apply { letterSpacing = .16f; setTextColor(muted) })
-        brand.addView(label("Моя библиотека", 32f))
-        header.addView(brand, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        header.addView(button("⋯") { menu() }.apply { contentDescription = "Действия библиотеки" })
-        val query = EditText(this).apply {
-            hint = "⌕  Поиск по заметкам и тегам"
+    }
+
+    private fun saveCapture() {
+        if (captureDraft.isBlank()) { notice("Напишите или продиктуйте мысль."); return }
+        val title = captureDraft.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+            ?.removePrefix("# ")?.take(80)?.trim().orEmpty().ifBlank { "Новая заметка" }
+        val text = "# $title\n\n$captureDraft"
+        var draftID = drafts.getString("id", null) ?: java.util.UUID.randomUUID().toString().also {
+            check(drafts.edit().putString("id", it).commit()) { "Не удалось сохранить черновик" }
+        }
+        val existing = vault.all().firstOrNull { it.id == draftID }
+        if (existing != null && existing.text != text) {
+            draftID = java.util.UUID.randomUUID().toString()
+            check(drafts.edit().putString("id", draftID).commit()) { "Не удалось сохранить черновик" }
+        }
+        vault.save(Note(draftID, text))
+        check(drafts.edit().remove("text").remove("id").commit()) { "Не удалось обновить черновик" }
+        captureDraft = ""
+        Toast.makeText(this, "Заметка сохранена", Toast.LENGTH_SHORT).show()
+        edit(vault.read(draftID))
+    }
+
+    private fun searchContent(content: LinearLayout) {
+        section(content, "Поиск")
+        val field = EditText(this).apply {
+            hint = "Найти мысль или тему"
             contentDescription = "Поиск по заметкам"
-            setSingleLine()
-            setText(search)
-            textSize = 16f
-            setPadding(dp(16), 0, dp(16), 0)
-            background = surface(Color.WHITE)
+            setSingleLine(); setText(search); textSize = 16f
+            setTextColor(design.text); setHintTextColor(design.muted)
+            setPadding(dp(12), 0, dp(12), 0)
+            background = design.panel(design.surface, 12, true)
         }
-        root.addView(query, LinearLayout.LayoutParams(MATCH_PARENT, dp(52)).apply { topMargin = dp(20); bottomMargin = dp(16) })
-        val tabs = row()
-        root.addView(tabs)
-        fun tab(name: String, selected: Boolean, action: () -> Unit) = button(name, action).apply {
-            if (selected) {
-                background = surface(ink, 24)
-                setTextColor(Color.WHITE)
-            }
+        content.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, dp(52)))
+        val results = column()
+        content.addView(results, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+        val notes = vault.recent()
+        fun refresh() {
+            results.removeAllViews()
+            val matches = notes.filter { it.text.contains(search, ignoreCase = true) }
+            if (matches.isEmpty()) results.addView(label(if (search.isBlank()) "Заметок пока нет." else "Совпадений нет. Попробуйте другое слово.", 16f).apply { setTextColor(muted) })
+            else matches.forEach { noteCard(results, it) }
         }
-        tabs.addView(tab("Заметки", !tasks) { tasks = false; library() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        tabs.addView(tab("Задачи", tasks) { tasks = true; library() }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(8) })
-        val section = label(if (tasks) "Задачи" else "Все заметки", 23f)
-        root.addView(section, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(22); bottomMargin = dp(10) })
+        changes(field) { search = field.text.toString(); refresh() }
+        refresh()
+    }
+
+    private fun libraryContent(content: LinearLayout) {
+        section(content, "Библиотека")
+        val controls = row()
+        controls.addView(button("Заметки") { tasks = false; library() }.apply {
+            background = design.panel(if (!tasks) design.tint else design.surface, 16, true)
+        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        controls.addView(button("Задачи") { tasks = true; library() }.apply {
+            background = design.panel(if (tasks) design.tint else design.surface, 16, true)
+        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        content.addView(controls)
         val list = column()
-        root.addView(ScrollView(this).apply { isFillViewport = true; addView(list) }, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-        val actions = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        root.addView(actions, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
-        actions.addView(button("↻") {
-            val url = settings.getString("url", "").orEmpty()
-            val key = settings.getString("key", "").orEmpty()
-            if (url.isNotEmpty() && key.isNotEmpty()) synchronize(url, key) else connection()
-        }.apply { contentDescription = "Синхронизировать" }, LinearLayout.LayoutParams(dp(56), dp(56)))
-        actions.addView(button("＋  Новая заметка") { edit(vault.create("# " + suggestedTitle() + "\n\n"), true) }.apply {
-            background = surface(ink, 22); setTextColor(Color.WHITE); textSize = 16f
-            elevation = dp(3).toFloat()
-        }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(10) })
+        content.addView(list, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
         fun refresh() {
             list.removeAllViews()
-            for (note in vault.all().filter { it.text.contains(search, ignoreCase = true) }) {
-                if (!tasks) {
-                    val entry = column().apply {
-                        background = surface(Color.WHITE, 20)
-                        setPadding(dp(18), dp(16), dp(18), dp(16))
-                        isFocusable = true
-                        contentDescription = note.title
-                        setOnClickListener { edit(note) }
-                        setOnLongClickListener {
-                            AlertDialog.Builder(this@MainActivity).setTitle(note.title)
-                                .setItems(arrayOf("Открыть", "Удалить")) { _, choice ->
-                                    if (choice == 0) edit(note)
-                                    else AlertDialog.Builder(this@MainActivity).setMessage("Удалить эту заметку?")
-                                        .setNegativeButton("Отмена", null)
-                                        .setPositiveButton("Удалить") { _, _ -> safely { vault.remove(listOf(note.id)); library() } }.show()
-                                }.show()
-                            true
-                        }
-                        addView(label(note.title, 22f))
-                        val preview = note.text.lines().filter { it.isNotBlank() && !it.startsWith("# ") }.joinToString(" ")
-                        if (preview.isNotBlank()) addView(label(preview, 14f).apply {
-                            setTextColor(muted); maxLines = 2
-                            ellipsize = android.text.TextUtils.TruncateAt.END
-                            setPadding(0, dp(6), 0, 0)
-                        })
-                    }
-                    list.addView(entry, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
-                } else note.text.lines().forEachIndexed { index, line ->
-                    val match = Regex("^\\s*[-*] \\[([ xX])] (.+)").find(line)
-                    if (match != null) list.addView(CheckBox(this).apply {
+            for (note in vault.recent()) {
+                if (!tasks) noteCard(list, note)
+                else note.text.lines().forEachIndexed { index, line ->
+                    val match = Regex("^\\s*[-*] \\[([ xX])] (.+)").find(line) ?: return@forEachIndexed
+                    list.addView(CheckBox(this).apply {
                         text = match.groupValues[2] + " · " + note.title
-                        isChecked = match.groupValues[1] != " "
+                        setTextColor(design.text); buttonTintList = ColorStateList.valueOf(design.secondary)
+                        minHeight = dp(48); isChecked = match.groupValues[1] != " "
                         setOnClickListener { safely {
                             val lines = note.text.split('\n').toMutableList()
                             lines[index] = line.replaceFirst(Regex("\\[[ xX]]"), if (isChecked) "[x]" else "[ ]")
@@ -214,13 +299,80 @@ class MainActivity : Activity() {
                     })
                 }
             }
-            if (list.childCount == 0) list.addView(label(when {
-                search.isNotEmpty() -> "Совпадений нет"
-                tasks -> "Добавьте строку «- [ ] Задача» в заметку."
-                else -> "Создайте первую заметку или импортируйте файл .md."
-            }, 16f))
+            if (list.childCount == 0) list.addView(label(if (tasks) "Задач пока нет." else "Заметок пока нет.", 16f).apply { setTextColor(muted) })
         }
-        changes(query) { search = query.text.toString(); refresh() }; refresh()
+        refresh()
+        content.addView(button("Синхронизировать") {
+            val url = settings.getString("url", "").orEmpty()
+            val key = settings.getString("key", "").orEmpty()
+            if (url.isNotEmpty() && key.isNotEmpty()) synchronize(url, key) else connection()
+        }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+    }
+
+    private fun noteCard(container: LinearLayout, note: Note) {
+        val entry = column().apply {
+            background = design.panel(design.surface, 20, true)
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            minimumHeight = dp(48); isFocusable = true
+            setOnClickListener { edit(note) }
+            setOnLongClickListener {
+                AlertDialog.Builder(this@MainActivity).setTitle(note.title)
+                    .setItems(arrayOf("Открыть", "Удалить")) { _, choice ->
+                        if (choice == 0) edit(note)
+                        else AlertDialog.Builder(this@MainActivity).setMessage("Удалить эту заметку?")
+                            .setNegativeButton("Отмена", null)
+                            .setPositiveButton("Удалить") { _, _ -> safely { vault.remove(listOf(note.id)); library() } }.show()
+                    }.show()
+                true
+            }
+            addView(label(note.title, 18f))
+            val preview = note.text.lines().filter { it.isNotBlank() && !it.startsWith("# ") }.joinToString(" ")
+            if (preview.isNotBlank()) addView(label(preview, 16f).apply {
+                setTextColor(muted); maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(6), 0, 0)
+            })
+            val tags = MarkdownMetadata.tags(note.text)
+            contentDescription = listOf(note.title, preview, tags.joinToString(" ") { "#" + it })
+                .filter { it.isNotBlank() }.joinToString(". ")
+            if (tags.isNotEmpty()) addView(label(tags.joinToString("  ") { "#$it" }, 13f).apply {
+                setTextColor(design.secondary); setPadding(0, dp(8), 0, 0); maxLines = 2
+            })
+        }
+        container.addView(entry, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
+    }
+
+    private fun linksContent(content: LinearLayout) {
+        section(content, "Связи")
+        val notes = vault.recent()
+        if (notes.isEmpty()) {
+            content.addView(label("Создайте заметки и свяжите их, чтобы увидеть граф.", 16f).apply { setTextColor(muted) })
+            return
+        }
+        val graph = KnowledgeGraph(this, notes, { edit(it) }, { from, to ->
+            notice("«" + from.title + "» содержит ссылку на «" + to.title + "».")
+        })
+        graph.background = design.panel(design.surface, 20, true)
+        content.addView(graph, LinearLayout.LayoutParams(MATCH_PARENT, dp(250)))
+        if (notes.size > 16) content.addView(label("На графе показаны 16 недавних заметок. Полный список ниже.", 13f).apply { setTextColor(muted) })
+        section(content, "Список заметок")
+        notes.forEach { note ->
+            val entry = button(note.title) { edit(note) }
+            entry.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+            entry.background = design.panel(design.surface, 16, true)
+            content.addView(entry, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
+            note.links.distinct().forEach { target ->
+                val linked = notes.firstOrNull { it.title.equals(target, ignoreCase = true) }
+                val description = if (linked == null) "Связь: ${note.title} → $target (заметка ещё не создана)"
+                    else "Связь: ${note.title} → ${linked.title}"
+                val edge = button(description) {
+                    if (linked == null) notice("«${note.title}» содержит ссылку на ещё не созданную заметку «$target».")
+                    else notice("«${note.title}» содержит ссылку на «${linked.title}».")
+                }
+                edge.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                content.addView(edge, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
+            }
+        }
     }
     private fun menu() {
         AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер")) { _, index ->
@@ -254,44 +406,115 @@ class MainActivity : Activity() {
         bar.addView(button("Связи") { flush(); connections(vault.read(note.id)) })
         bar.addView(button("⋯") {
             flush()
-            AlertDialog.Builder(this).setItems(arrayOf("Экспорт .md", "Поделиться текстом")) { _, index ->
-                if (index == 0) {
-                    exportId = note.id
-                    startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("text/markdown")
-                        .putExtra(Intent.EXTRA_TITLE, vault.read(note.id).title.replace('/', '_') + ".md"), 2)
-                } else startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(Intent.EXTRA_TEXT, editor?.text.toString()), "Поделиться заметкой"))
+            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом")) { _, index ->
+                safely {
+                    when (index) {
+                        0 -> renameTitle()
+                        1 -> manageTags()
+                        2 -> removeLink()
+                        3 -> showLocalGraph(vault.read(note.id))
+                        4 -> {
+                            exportId = note.id
+                            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("text/markdown")
+                                .putExtra(Intent.EXTRA_TITLE, vault.read(note.id).title.replace('/', '_') + ".md"), 2)
+                        }
+                        5 -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, editor?.text.toString()), "Поделиться заметкой"))
+                    }
+                }
             }.show()
         }.apply { contentDescription = "Действия заметки" })
         val field = EditText(this).apply {
             gravity = android.view.Gravity.TOP
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            typeface = Typeface.SERIF; textSize = 20f; setText(note.text)
-            background = null; setPadding(dp(4), dp(24), dp(4), dp(12)); setLineSpacing(dp(4).toFloat(), 1f)
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL); textSize = 16f; setText(note.text)
+            setTextColor(design.text)
+            background = design.panel(design.surface, 20, true)
+            setPadding(dp(16), dp(16), dp(16), dp(16)); setLineSpacing(dp(5).toFloat(), 1f)
             contentDescription = "Текст Markdown"
         }
-        editor = field; root.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        editor = field
+        root.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(16); bottomMargin = dp(8) })
         if (selectTitle) { field.requestFocus(); field.setSelection(note.text.length) }
         val tools = row()
-        root.addView(tools)
-        tools.addView(button("＋ Связь") { insertLink() }, LinearLayout.LayoutParams(0, dp(52), 1f))
-        tools.addView(button("Место") { choosePlace() }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { marginStart = dp(8) })
-        tools.addView(button("🎙 Голос") { voiceInput() }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { marginStart = dp(8) })
+        val toolScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(tools)
+        }
+        root.addView(toolScroll)
+        tools.addView(button("＋ Связь") { insertLink() })
+        tools.addView(button("Теги") { manageTags() }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
+        tools.addView(button("Граф") { flush(); showLocalGraph(vault.read(note.id)) },
+            LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
+        tools.addView(button("Место") { choosePlace() }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
+        tools.addView(button("Голос") { voiceInput() }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         changes(field) { dirty = true; handler.removeCallbacks(autoSave); handler.postDelayed(autoSave, 350) }
     }
-    private fun suggestedTitle(): String {
-        val now = java.util.Calendar.getInstance()
-        val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
-        val part = when (hour) {
-            in 5..11 -> "утро"
-            in 12..16 -> "день"
-            in 17..22 -> "вечер"
-            else -> "ночь"
+    private fun renameTitle() {
+        val field = editor ?: return
+        val input = EditText(this).apply {
+            setSingleLine()
+            setText(vault.read(requireNotNull(current)).title)
+            selectAll()
         }
-        val date = java.text.SimpleDateFormat("d MMMM yyyy 'года'", Locale("ru")).format(now.time)
-        val time = java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(now.time)
-        return "$date, $part · $time"
+        AlertDialog.Builder(this).setTitle("Заголовок").setView(input)
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить") { _, _ -> safely {
+                field.setText(MarkdownMetadata.rename(field.text.toString(), input.text.toString()))
+                flush()
+            } }.show()
     }
+
+    private fun manageTags() {
+        val field = editor ?: return
+        val tags = MarkdownMetadata.tags(field.text.toString())
+        val options = listOf("Добавить тег") + tags.map { "Удалить #$it" }
+        AlertDialog.Builder(this).setTitle("Теги").setItems(options.toTypedArray()) { _, index ->
+            if (index == 0) {
+                val input = EditText(this).apply { hint = "Название тега"; setSingleLine() }
+                AlertDialog.Builder(this).setTitle("Новый тег").setView(input)
+                    .setNegativeButton("Отмена", null)
+                    .setPositiveButton("Добавить") { _, _ -> safely {
+                        field.setText(MarkdownMetadata.add(field.text.toString(), input.text.toString()))
+                        flush()
+                    } }.show()
+            } else safely {
+                field.setText(MarkdownMetadata.remove(field.text.toString(), tags[index - 1]))
+                flush()
+            }
+        }.show()
+    }
+
+    private fun removeLink() {
+        val field = editor ?: return
+        val links = Note(requireNotNull(current), field.text.toString()).links.distinct()
+        if (links.isEmpty()) return notice("В заметке пока нет исходящих связей.")
+        AlertDialog.Builder(this).setTitle("Удалить связь").setItems(links.toTypedArray()) { _, index ->
+            val pattern = Regex("\\[\\[\\s*" + Regex.escape(links[index]) + "\\s*]]", RegexOption.IGNORE_CASE)
+            field.setText(pattern.replace(field.text.toString()) { it.value.removePrefix("[[").removeSuffix("]]") })
+            safely { flush() }
+        }.show()
+    }
+
+    private fun showLocalGraph(note: Note) {
+        val all = vault.recent()
+        val related = listOf(note) + all.filter { other ->
+            other.id != note.id && (note.links.any { it.equals(other.title, true) } ||
+                other.links.any { it.equals(note.title, true) })
+        }
+        val container = column().apply { setPadding(dp(16), dp(8), dp(16), dp(8)) }
+        lateinit var dialog: AlertDialog
+        val graph = KnowledgeGraph(this, related, { target -> dialog.dismiss(); edit(target) }, { from, to ->
+            notice("«" + from.title + "» содержит ссылку на «" + to.title + "».")
+        })
+        graph.background = design.panel(design.surface, 20, true)
+        container.addView(graph, LinearLayout.LayoutParams(MATCH_PARENT, dp(240)))
+        related.forEach { target -> container.addView(button(target.title) { dialog.dismiss(); edit(target) }) }
+        dialog = AlertDialog.Builder(this).setTitle("Связи заметки").setView(ScrollView(this).apply { addView(container) })
+            .setPositiveButton("Закрыть", null).create()
+        dialog.show()
+    }
+
     private fun choosePlace() {
         val preferences = getSharedPreferences("places", MODE_PRIVATE)
         val suggestions = preferences.getString("recent", "").orEmpty().split("\n").filter { it.isNotBlank() }
@@ -351,7 +574,7 @@ class MainActivity : Activity() {
         }
     }
     private fun insertLink() {
-        safely { flush() }
+        flush()
         val available = vault.all().filter { it.id != current }
         if (available.isEmpty()) {
             notice("Сначала создайте ещё одну заметку.")
@@ -365,12 +588,12 @@ class MainActivity : Activity() {
                 field.text.replace(start, end, "[[" + available[index].title + "]]")
             }.show()
     }
-    private fun voiceInput() {
+    private fun voiceInput(requestCode: Int = 3) {
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 .putExtra(RecognizerIntent.EXTRA_PROMPT, "Продиктуйте текст заметки")
-            startActivityForResult(intent, 3)
+            startActivityForResult(intent, requestCode)
         } catch (e: android.content.ActivityNotFoundException) {
             notice("На устройстве не найдено приложение для распознавания речи.")
         }
@@ -561,6 +784,14 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
         if (resultCode != RESULT_OK) return
+        if (requestCode == 5) {
+            val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
+            captureDraft = if (captureDraft.isBlank()) spoken else "$captureDraft $spoken"
+            drafts.edit().putString("text", captureDraft).apply()
+            page = "home"
+            library()
+            return
+        }
         if (requestCode == 3) {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
             editor?.let { field ->
