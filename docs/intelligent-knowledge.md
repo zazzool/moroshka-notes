@@ -16,3 +16,5 @@ The AI layer is opt-in and revision pinned. OpenRouter key and models stay on th
 - [MCP 2025-11-25 transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 
 Tests use deterministic fake provider replies; they do not verify real model quality or incur provider charges. Android fixture requires a device/emulator.
+
+The Alpha 9 preview variant has its own application ID `app.moroshka.notes.preview` and a test signature. It does not update or access a previous app's private library; use the portable archive or configured server to transfer notes. The existing compatible-release workflow remains separate and requires the original signing key.

@@ -14,7 +14,8 @@ export function suggestions(value) {
     value.title.trim().length>0 && value.title.length<=120 && !/[\r\n\u0000-\u001f]/u.test(value.title) &&
     categories.includes(value.category) && Array.isArray(value.tags) && value.tags.length<=8 &&
     value.tags.every(t=>typeof t==='string' && tagPattern.test(t)),502,'Некорректные предложения ИИ')
-  const tags=[...new Map(value.tags.map(t=>[t.toLocaleLowerCase(),t])).values()]
+  const seen=new Set()
+  const tags=value.tags.filter(t=>{const k=t.toLocaleLowerCase();if(seen.has(k))return false;seen.add(k);return true})
   return {title:value.title.trim(),category:value.category,tags}
 }
 function vector(value){

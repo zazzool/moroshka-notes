@@ -28,12 +28,17 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest
+      - run: ./gradlew :app:assembleDebug :app:assembleRelease :app:assemblePreview :app:assembleDebugAndroidTest
         working-directory: android
       - uses: actions/upload-artifact@v4
         with:
           name: moroshka-android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moroshka-android-preview
+          path: android/app/build/outputs/apk/preview/app-preview.apk
+          if-no-files-found: error
 
   browser:
     runs-on: ubuntu-latest
@@ -48,3 +53,37 @@ jobs:
       - run: python -m pip install playwright
       - run: python -m playwright install --with-deps chromium
       - run: python tests/browser.py
+
+  publish-preview:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[preview-release]')
+    needs: [server, android, browser]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: moroshka-android-preview
+          path: candidate
+      - name: Verify isolated application identity and publish preview
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose --print-certs candidate/app-preview.apk
+          info=$("$tools/aapt" dump badging candidate/app-preview.apk | sed -n '/^package:/p')
+          [[ "$info" == *"name='app.moroshka.notes.preview'"* ]]
+          [[ "$info" == *"versionCode='9'"* ]]
+          [[ "$info" == *"versionName='0.1.0-alpha.9-preview'"* ]]
+          mkdir release
+          cp candidate/app-preview.apk release/Moroshka-Notes-0.1.0-alpha.9-preview.apk
+          (cd release && sha256sum *.apk > SHA256SUMS)
+          cat > notes.md <<'NOTES'
+          Морошка Preview — автономная тестовая сборка Android 8+.
+          Включает архив, историю редакций, корзину, автоматическую и инкрементальную синхронизацию, ИИ-предложения, смысловой поиск и связи, серверные MCP-инструменты.
+          Для сетевых функций обновите собственный сервер; ИИ и MCP требуют отдельной настройки.
+          Идентификатор app.moroshka.notes.preview отличается от предыдущих версий, поэтому приложение устанавливается рядом с ними. Библиотека в Preview изолирована, данные автоматически не переносятся. Не удаляйте основное приложение. APK подписан тестовым ключом, это не штатное обновление.
+          NOTES
+          gh release create v0.1.0-alpha.9-preview release/Moroshka-Notes-0.1.0-alpha.9-preview.apk release/SHA256SUMS --target "$GITHUB_SHA" --title "Moroshka Notes Alpha 9 Preview" --notes-file notes.md --prerelease --latest=false
