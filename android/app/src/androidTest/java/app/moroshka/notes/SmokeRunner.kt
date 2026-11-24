@@ -195,11 +195,40 @@ class SmokeRunner : Instrumentation() {
         return "Portable-backup-ok"
     }
 
+    private fun historyFixture(): String {
+        val vault = Vault(targetContext)
+        val first = vault.create("# История\n\nПервый текст", false)
+        val next = first.copy(text = "# История\n\nВторой текст")
+        vault.save(next, false)
+        vault.save(next, false)
+        val version = vault.versions(first.id).single()
+        check(vault.versionText(first.id, version.revision) == first.text)
+        check(vault.read(first.id).text == next.text)
+        vault.save(first, false)
+        vault.save(next, false)
+        check(vault.versions(first.id).size == 2)
+        val restored = vault.create(vault.versionText(first.id, version.revision), false)
+        check(restored.id != first.id && restored.text == first.text)
+        check(vault.read(first.id).text == next.text)
+        vault.remove(listOf(first.id))
+        val deleted = vault.trashEntries().single { it.name == first.id + ".md" }
+        check(vault.trashText(deleted.name) == next.text)
+        val fromTrash = vault.create(vault.trashText(deleted.name), false)
+        check(fromTrash.id != first.id && fromTrash.text == next.text)
+        check(vault.all().none { it.id == first.id })
+        check(vault.trashEntries().any { it.name == deleted.name })
+        check(vault.versions(first.id).size == 2)
+        check(runCatching { vault.trashText("../connection") }.isFailure)
+        check(runCatching { vault.versionText(first.id, "../bad") }.isFailure)
+        return "History-and-trash-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
             if (args.containsKey("designFixture")) return@runCatching designFixture()
             if (args.containsKey("backupFixture")) return@runCatching backupFixture()
+            if (args.containsKey("historyFixture")) return@runCatching historyFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)

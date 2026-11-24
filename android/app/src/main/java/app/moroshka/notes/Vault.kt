@@ -15,25 +15,40 @@ data class Note(val id: String, val text: String) {
 }
 
 class Vault(context: Context) {
+    private companion object { val writeLock = Any() }
+    private val history = RevisionStore(File(context.filesDir, "history"))
+    data class SavedVersion(val revision: String, val archivedAt: Long)
+    data class TrashEntry(val name: String, val title: String, val modifiedAt: Long)
     private val backup = DocumentBackup(context)
     private val dir = File(context.filesDir, "vault").apply { mkdirs() }
     private val trash = File(context.filesDir, "trash").apply { mkdirs() }
     private val bases = context.getSharedPreferences("revisions", Context.MODE_PRIVATE)
     private val validId = Regex("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+    private val trashName = Regex("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?:\\.md|\\.[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\\.archived)")
     private fun file(id: String): AtomicFile {
         require(validId.matches(id))
         return AtomicFile(File(dir, "$id.md"))
     }
-    fun read(id: String) = Note(id, file(id).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() })
-    fun all() = dir.listFiles().orEmpty().map { it.name.removeSuffix(".bak") }
-        .filter { it.endsWith(".md") && validId.matches(it.removeSuffix(".md")) }
-        .distinct().map { read(it.removeSuffix(".md")) }.sortedBy { it.title.lowercase() }
+    fun read(id: String) = synchronized(writeLock) { Note(id, file(id).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }) }
+    fun all() = synchronized(writeLock) {
+        dir.listFiles().orEmpty().map { it.name.removeSuffix(".bak") }
+            .filter { it.endsWith(".md") && validId.matches(it.removeSuffix(".md")) }
+            .distinct().map { read(it.removeSuffix(".md")) }.sortedBy { it.title.lowercase() }
+    }
     fun recent(): List<Note> = all().sortedByDescending { File(dir, it.id + ".md").lastModified() }
     fun create(text: String, withBackup: Boolean = true) = save(Note(UUID.randomUUID().toString(), text), withBackup)
-    fun save(note: Note, withBackup: Boolean = true): Note {
+    fun save(note: Note, withBackup: Boolean = true): Note = synchronized(writeLock) {
         val bytes = note.text.toByteArray(Charsets.UTF_8)
         require(bytes.size <= 512 * 1024) { "Предел одной заметки — 512 КиБ" }
         val file = file(note.id)
+        if (file.baseFile.exists() || File(file.baseFile.path + ".bak").exists()) {
+            val previous = file.readFully()
+            if (!previous.contentEquals(bytes)) history.record(note.id, previous)
+            else {
+                if (withBackup) backup.save(note)
+                return@synchronized note
+            }
+        }
         val stream = file.startWrite()
         try {
             stream.write(bytes)
@@ -43,10 +58,25 @@ class Vault(context: Context) {
             throw e
         }
         if (withBackup) backup.save(note)
-        return note
+        note
     }
+
+    fun versions(id: String): List<SavedVersion> = synchronized(writeLock) {
+        history.list(id).map { SavedVersion(it.revision, it.archivedAt) }
+    }
+    fun versionText(id: String, revision: String): String = synchronized(writeLock) { history.read(id, revision) }
+    fun trashEntries(): List<TrashEntry> = synchronized(writeLock) {
+        trash.listFiles().orEmpty().filter { it.isFile && trashName.matches(it.name) }
+            .map { TrashEntry(it.name, Note(it.name.substringBefore('.'), it.readText(Charsets.UTF_8)).title, it.lastModified()) }
+            .sortedWith(compareByDescending<TrashEntry> { it.modifiedAt }.thenBy { it.name })
+    }
+    fun trashText(name: String): String = synchronized(writeLock) {
+        require(trashName.matches(name)) { "Некорректное имя записи корзины" }
+        File(trash, name).readText(Charsets.UTF_8)
+    }
+
     /** Add-only import; previously deleted IDs are not reused. Retrying is safe. */
-    fun restoreArchive(bytes: ByteArray): BackupArchive.Result {
+    fun restoreArchive(bytes: ByteArray): BackupArchive.Result = synchronized(writeLock) {
         val entries = BackupArchive.decode(bytes)
         val deletedIds = trash.listFiles().orEmpty().map { it.name.removeSuffix(".md") }
             .filter { validId.matches(it) }.toSet()
@@ -61,10 +91,10 @@ class Vault(context: Context) {
                     "Повторите импорт после устранения ошибки: " + (error.message ?: "Ошибка записи"), error)
             }
         }
-        return BackupArchive.Result(added, plan.skipped, plan.conflicts)
+        BackupArchive.Result(added, plan.skipped, plan.conflicts)
     }
 
-    fun remove(ids: Collection<String>) {
+    fun remove(ids: Collection<String>) = synchronized(writeLock) {
         for (id in ids) {
             val note = read(id)
             backup.remove(note, bases.getString(id, null))
@@ -72,7 +102,8 @@ class Vault(context: Context) {
             check(!destination.exists() && File(dir, id + ".md").renameTo(destination)) { "Не удалось переместить заметку в корзину" }
         }
     }
-    fun restoreDeleted(note: Note, base: String?) {
+    fun restoreDeleted(note: Note, base: String?) = synchronized(writeLock) {
+        require(validId.matches(note.id))
         val destination = File(trash, note.id + ".md")
         if (!destination.exists()) {
             val file = AtomicFile(destination)
