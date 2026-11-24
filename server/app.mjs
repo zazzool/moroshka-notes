@@ -138,6 +138,11 @@ export function application(options, request = fetch) {
       } else if (pathname.startsWith('/api/')) {
         requireKey(req, token)
         if (get && pathname === '/api/notes') return json(res, 200, { notes: vault.list(), deleted: vault.deleted() })
+        if (get && pathname === '/api/sync/manifest') return json(res, 200, vault.manifest())
+        if (req.method === 'POST' && pathname === '/api/sync/read') {
+          const {notes} = await payload(req)
+          return json(res, 200, {notes:vault.readBatch(notes)})
+        }
         if (get && pathname === '/api/trash') return json(res, 200, { notes: vault.trashList() })
         if (get && pathname.startsWith('/api/trash/')) {
           return json(res, 200, vault.trashRead(pathname.slice('/api/trash/'.length)))

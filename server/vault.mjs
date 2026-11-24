@@ -29,6 +29,36 @@ export function openVault(dir) {
     return readdirSync(dir).filter(n => n.endsWith('.md') && validId.test(n.slice(0, -3)))
       .sort().map(n => read(n.slice(0, -3))).filter(Boolean)
   }
+  // A complete revision inventory, without materializing all note texts at once.
+  function manifest() {
+    const notes = readdirSync(dir).filter(n => n.endsWith('.md') && validId.test(n.slice(0,-3)))
+      .sort().map(n => {
+        const note = read(n.slice(0,-3))
+        return note && {id:note.id, revision:note.revision}
+      }).filter(Boolean)
+    return {version:1, notes, deleted:deleted()}
+  }
+  // Pin every requested body to the observed revision. Reject the entire batch
+  // if any note has changed since the manifest; clients can start over safely.
+  function readBatch(requested) {
+    if (!Array.isArray(requested) || !requested.length || requested.length > 8)
+      throw new ApiError(400, 'Запросите от 1 до 8 редакций')
+    const ids = new Set()
+    for (const item of requested) {
+      if (!item || typeof item.id !== 'string' || !validId.test(item.id) ||
+          typeof item.revision !== 'string' || !validRevision.test(item.revision) || ids.has(item.id))
+        throw new ApiError(400, 'Некорректный идентификатор, ревизия или повтор заметки')
+      ids.add(item.id)
+    }
+    return requested.map(({id,revision}) => {
+      const note = read(id)
+      if (!note || note.revision !== revision || existsSync(join(dir,id+'.deleted')))
+        throw new ApiError(409, 'Библиотека изменилась во время обмена. Повторите синхронизацию.')
+      if (Buffer.byteLength(note.text) > maxBytes)
+        throw new ApiError(413, 'Заметка превышает допустимый размер 512 КиБ')
+      return note
+    })
+  }
   // Atomic immutable snapshots precede replacement of an existing live note.
   function atomicWrite(path, text) {
     const temporary = path + '.' + randomUUID() + '.tmp'
@@ -112,5 +142,5 @@ export function openVault(dir) {
     renameSync(join(dir, id + '.md'), tombstone)
     return { deleted: true }
   }
-  return { read, list, put, deleted, remove, history, historyRead, trashList, trashRead }
+  return { read, list, put, deleted, remove, history, historyRead, trashList, trashRead, manifest, readBatch }
 }
