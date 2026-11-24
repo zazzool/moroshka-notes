@@ -223,12 +223,38 @@ class SmokeRunner : Instrumentation() {
         return "History-and-trash-ok"
     }
 
+    private fun syncGateFixture(): String {
+        val owner = Any()
+        val other = Any()
+        val first = requireNotNull(SyncAccess.backgroundLease())
+        check(SyncAccess.backgroundAllowed(first))
+        SyncAccess.enter(owner)
+        try {
+            check(SyncAccess.backgroundLease() == null)
+            check(!SyncAccess.backgroundAllowed(first))
+            SyncAccess.enter(other)
+            SyncAccess.leave(owner)
+            check(SyncAccess.backgroundLease() == null)
+        } finally {
+            SyncAccess.leave(owner)
+            SyncAccess.leave(other)
+        }
+        val next = requireNotNull(SyncAccess.backgroundLease())
+        check(next != first && !SyncAccess.backgroundAllowed(first))
+        check(SyncAccess.backgroundAllowed(next))
+        val vault = Vault(targetContext)
+        check(runCatching { vault.sync("https://localhost:1", "fixture", { false }) }
+            .exceptionOrNull() is SyncDeferred)
+        return "Automatic-sync-gate-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
             if (args.containsKey("designFixture")) return@runCatching designFixture()
             if (args.containsKey("backupFixture")) return@runCatching backupFixture()
             if (args.containsKey("historyFixture")) return@runCatching historyFixture()
+            if (args.containsKey("syncGateFixture")) return@runCatching syncGateFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)

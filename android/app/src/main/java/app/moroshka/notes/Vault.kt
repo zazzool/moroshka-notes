@@ -15,7 +15,7 @@ data class Note(val id: String, val text: String) {
 }
 
 class Vault(context: Context) {
-    private companion object { val writeLock = Any() }
+    private companion object { val writeLock = SyncAccess.localLock }
     private val history = RevisionStore(File(context.filesDir, "history"))
     data class SavedVersion(val revision: String, val archivedAt: Long)
     data class TrashEntry(val name: String, val title: String, val modifiedAt: Long)
@@ -121,10 +121,26 @@ class Vault(context: Context) {
     private fun mark(id: String, revision: String) {
         check(bases.edit().putString(id, revision).commit()) { "Не удалось сохранить ревизию" }
     }
-    fun sync(server: String, token: String): Int {
+    /** Network exchange is serialized; local mutations are short, guarded checkpoints.
+     * A background job loses its lease as soon as an activity becomes visible.
+     */
+    fun sync(server: String, token: String, permitted: () -> Boolean = { true },
+             trackConnection: (HttpsURLConnection?) -> Unit = {}): Int {
+        if (!SyncAccess.exchange.tryLock()) throw SyncDeferred()
+        try { return exchange(server, token, permitted, trackConnection) }
+        finally { SyncAccess.exchange.unlock() }
+    }
+
+    private fun exchange(server: String, token: String, permitted: () -> Boolean,
+                         trackConnection: (HttpsURLConnection?) -> Unit): Int {
+        fun checkpoint() { if (!permitted()) throw SyncDeferred() }
+        fun <T> local(action: () -> T): T = synchronized(writeLock) { checkpoint(); action() }
         fun api(path: String, data: JSONObject? = null, method: String = "PUT"): JSONObject {
+            checkpoint()
             val conn = URL(server + path).openConnection() as HttpsURLConnection
             try {
+                trackConnection(conn)
+                checkpoint()
                 conn.instanceFollowRedirects = false
                 conn.connectTimeout = 12000
                 conn.readTimeout = 30000
@@ -136,43 +152,40 @@ class Vault(context: Context) {
                     conn.outputStream.use { it.write(data.toString().toByteArray(Charsets.UTF_8)) }
                 }
                 val code = conn.responseCode
-                check(code in 200..299) {
-                    when (code) {
-                        401 -> "Проверьте ключ сервера"
-                        409 -> "Заметка изменилась во время обмена. Повторите синхронизацию."
-                        else -> "Ответ сервера HTTP $code"
-                    }
-                }
-                return JSONObject(conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
-            } finally { conn.disconnect() }
+                if (code !in 200..299) throw SyncHttpError(code)
+                val response = JSONObject(conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                checkpoint()
+                return response
+            } finally { trackConnection(null); conn.disconnect() }
         }
         val snapshot = api("/api/notes")
         val list = snapshot.getJSONArray("notes")
         val remote = (0 until list.length()).map { list.getJSONObject(it) }.associateBy { it.getString("id") }.toMutableMap()
         var conflicts = 0
         val deleted = snapshot.optJSONArray("deleted") ?: org.json.JSONArray()
-        for (i in 0 until deleted.length()) {
+        for (i in 0 until deleted.length()) local {
             val item = deleted.getJSONObject(i)
             val id = item.getString("id")
-            val local = all().firstOrNull { it.id == id } ?: continue
+            val current = all().firstOrNull { it.id == id } ?: return@local
             val base = bases.getString(id, null)
-            val localHash = MessageDigest.getInstance("SHA-256").digest(local.text.toByteArray(Charsets.UTF_8))
+            val localHash = MessageDigest.getInstance("SHA-256").digest(current.text.toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it) }
             if (localHash != base) {
-                val copy = "# Конфликт · " + local.title + "\n\n" + local.text
-                create(if (copy.toByteArray(Charsets.UTF_8).size <= 512 * 1024) copy else local.text)
+                val copy = "# Конфликт · " + current.title + "\n\n" + current.text
+                create(if (copy.toByteArray(Charsets.UTF_8).size <= 512 * 1024) copy else current.text)
                 conflicts++
             }
             remove(listOf(id))
         }
-        for (entry in trash.listFiles().orEmpty().filter { it.name.endsWith(".md") }) {
+        val deletedEntries = local { trash.listFiles().orEmpty().filter { it.name.endsWith(".md") } }
+        for (entry in deletedEntries) {
             val id = entry.name.removeSuffix(".md")
-            val base = bases.getString(id, null)
+            val base = local { bases.getString(id, null) }
             val other = remote[id]
             if (other != null && base != null && other.getString("revision") == base) {
                 api("/api/notes/" + id, JSONObject().put("base", base), "DELETE")
                 remote.remove(id)
-            } else if (other != null) {
+            } else if (other != null) local {
                 save(Note(id, other.getString("text")))
                 backup.clearDeletion(id)
                 val archived = File(trash, id + "." + UUID.randomUUID() + ".archived")
@@ -182,29 +195,31 @@ class Vault(context: Context) {
                 conflicts++
             }
         }
-        for (note in all()) {
-            val base = bases.getString(note.id, null)
+        for (note in local { all() }) {
+            val base = local { bases.getString(note.id, null) }
             val localHash = MessageDigest.getInstance("SHA-256").digest(note.text.toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it) }
             val other = remote.remove(note.id)
             if (other != null) {
                 val revision = other.getString("revision")
-                if (localHash == revision) { mark(note.id, revision); continue }
+                if (localHash == revision) { local { mark(note.id, revision) }; continue }
                 if (revision != base) {
-                    if (localHash != base) {
-                        val copy = "# Конфликт · " + note.title + "\n\n" + note.text
-                        create(if (copy.toByteArray(Charsets.UTF_8).size <= 512 * 1024) copy else note.text)
-                        conflicts++
+                    local {
+                        if (localHash != base) {
+                            val copy = "# Конфликт · " + note.title + "\n\n" + note.text
+                            create(if (copy.toByteArray(Charsets.UTF_8).size <= 512 * 1024) copy else note.text)
+                            conflicts++
+                        }
+                        save(Note(note.id, other.getString("text")))
+                        mark(note.id, revision)
                     }
-                    save(Note(note.id, other.getString("text")))
-                    mark(note.id, revision)
                     continue
                 }
             }
             val result = api("/api/notes/" + note.id, JSONObject().put("text", note.text).put("base", base ?: JSONObject.NULL))
-            mark(note.id, result.getString("revision"))
+            local { mark(note.id, result.getString("revision")) }
         }
-        for ((id, obj) in remote) {
+        for ((id, obj) in remote) local {
             save(Note(id, obj.getString("text")))
             mark(id, obj.getString("revision"))
         }

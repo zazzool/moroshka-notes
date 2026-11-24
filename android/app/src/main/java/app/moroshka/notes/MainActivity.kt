@@ -34,6 +34,9 @@ class MainActivity : Activity() {
     private var editor: EditText? = null
     private var dirty = false
     private var syncing = false
+    private var visible = false
+    private var wasStopped = false
+    private val syncOwner = Any()
     private var pendingShare: String? = null
     private var exportId: String? = null
     private var placeField: AutoCompleteTextView? = null
@@ -47,6 +50,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        SyncAccess.enter(syncOwner)
         vault = Vault(this)
         captureDraft = drafts.getString("text", "").orEmpty()
         page = state?.getString("page") ?: "home"
@@ -74,11 +78,48 @@ class MainActivity : Activity() {
         val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
         if (syncing) pendingShare = text else safely { flush(); edit(vault.create(text)) }
     }
+    override fun onStart() {
+        super.onStart()
+        SyncAccess.enter(syncOwner)
+        visible = true
+        if (wasStopped && !syncing && !dirty) safely {
+            val id = current
+            if (id == null) library()
+            else {
+                val fresh = vault.all().firstOrNull { it.id == id }
+                if (fresh == null) library()
+                else if (fresh.text != editor?.text.toString()) edit(fresh)
+            }
+        }
+        wasStopped = false
+    }
     override fun onPause() { safely { flush() }; super.onPause() }
+    override fun onStop() {
+        visible = false; wasStopped = true
+        releaseBackground()
+        super.onStop()
+    }
+    private fun releaseBackground() {
+        if (visible || syncing || dirty) return
+        SyncAccess.leave(syncOwner)
+        runCatching { BackgroundSync.schedule(applicationContext) }.onFailure {
+            BackgroundSync.record(applicationContext, "Не удалось запланировать автоматический обмен")
+        }
+    }
     override fun onSaveInstanceState(out: Bundle) {
         super.onSaveInstanceState(out); out.putString("note", current); out.putString("export", exportId); out.putString("page", page)
     }
-    override fun onDestroy() { handler.removeCallbacks(autoSave); worker.shutdown(); super.onDestroy() }
+    override fun onDestroy() {
+        handler.removeCallbacks(autoSave)
+        val context = applicationContext
+        // If a manual exchange/archive is still running, release only after its queued work.
+        worker.execute {
+            SyncAccess.leave(syncOwner)
+            runCatching { BackgroundSync.schedule(context) }
+        }
+        worker.shutdown()
+        super.onDestroy()
+    }
     @Deprecated("Activity back navigation")
     override fun onBackPressed() {
         if (syncing) return
@@ -414,6 +455,24 @@ class MainActivity : Activity() {
             val key = settings.getString("key", "").orEmpty()
             if (url.isNotEmpty() && key.isNotEmpty()) synchronize(url, key) else connection()
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+        val syncStatus = label(BackgroundSync.status(this), 13f).apply { setTextColor(muted) }
+        content.addView(CheckBox(this).apply {
+            text = "Автосинхронизация в фоне"
+            setTextColor(design.text); buttonTintList = ColorStateList.valueOf(design.secondary)
+            minHeight = dp(48); isChecked = BackgroundSync.enabled(this@MainActivity)
+            setOnClickListener {
+                try {
+                    BackgroundSync.configure(this@MainActivity, isChecked)
+                    syncStatus.text = BackgroundSync.status(this@MainActivity)
+                    syncStatus.visibility = if (isChecked) View.VISIBLE else View.GONE
+                } catch (error: Exception) {
+                    isChecked = BackgroundSync.enabled(this@MainActivity)
+                    notice(error.message ?: "Не удалось изменить настройку")
+                }
+            }
+        })
+        syncStatus.visibility = if (BackgroundSync.enabled(this)) View.VISIBLE else View.GONE
+        content.addView(syncStatus)
     }
 
     private fun noteCard(container: LinearLayout, note: Note) {
@@ -580,6 +639,7 @@ class MainActivity : Activity() {
                 val shared = pendingShare
                 if (shared != null) { pendingShare = null; safely { edit(vault.create(shared)) } }
                 result.onSuccess { notice(it) }.onFailure { notice(it.message ?: "Не удалось обработать архив") }
+                releaseBackground()
             }
         }
     }
@@ -970,8 +1030,14 @@ class MainActivity : Activity() {
     }
     private fun synchronize(url: String, key: String) {
         flush(); syncing = true; root.removeAllViews(); root.addView(label("Синхронизация…",22f))
+        val epoch = SyncAccess.epoch()
         worker.execute {
-            val result = runCatching { vault.sync(url, key) }
+            val result = runCatching { vault.sync(url, key, { SyncAccess.sameEpoch(epoch) }) }
+            if (SyncAccess.sameEpoch(epoch)) {
+                result.onSuccess { BackgroundSync.record(applicationContext,
+                    if (it == 0) "Синхронизировано" else "Сохранены конфликтные копии: $it", true) }
+                    .onFailure { BackgroundSync.record(applicationContext, "Последний обмен не завершён") }
+            }
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
                 syncing = false; library()
@@ -981,6 +1047,7 @@ class MainActivity : Activity() {
                     if (it > 0) notice("Обе версии сохранены. Конфликтных копий: $it. Проверьте их и повторите синхронизацию.")
                     else Toast.makeText(this,"Синхронизировано",Toast.LENGTH_SHORT).show()
                 }.onFailure { notice(it.message ?: "Сервер недоступен") }
+                releaseBackground()
             }
         }
     }
