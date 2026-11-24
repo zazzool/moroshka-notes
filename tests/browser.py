@@ -119,7 +119,7 @@ def history_check(origin, browser):
 
 
 def auto_sync_check(origin, browser):
-    ctx = browser.new_context()
+    ctx = browser.new_context(service_workers="block")
     page = ctx.new_page()
     page.goto(origin)
     connect(page)
@@ -139,10 +139,10 @@ def auto_sync_check(origin, browser):
         route.continue_()
     page.route("**/api/notes/*", delay_upload)
     page.get_by_label("Автосинхронизация", exact=True).check()
-    expect(page.locator("#status")).to_have_text("Синхронизировано", timeout=20000)
+    expect(page.locator("#saved")).to_have_text("Синхронизировано", timeout=20000)
     assert sent
     expect(page.get_by_label("Markdown")).to_have_value(newer)
-    expect(page.locator("#saved")).to_have_text("Синхронизировано", timeout=20000)
+    expect(page.locator("#status")).to_have_text("Синхронизировано", timeout=20000)
     # An offline edit persists locally, and connectivity resumes the exchange.
     ctx.set_offline(True)
     offline = "# Автообмен тест\n\nОфлайн правка"

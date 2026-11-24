@@ -6,6 +6,7 @@ const captureKey = 'moroshka.captureDraft'
 const autoKey = 'moroshka.autoSync'
 let autoEnabled = localStorage.getItem(autoKey) === 'true'
 let autoTimer = null, autoFailures = 0, autoAuthBlocked = false
+let autoNotBefore = 0, autoGeneration = 0
 let exchangeActive = false
 const AUTO_DELAY = 3000, AUTO_POLL = 120000
 const notes = new Map()
@@ -192,7 +193,7 @@ function openSettings() {
 function requestAuto(delay = AUTO_POLL) {
   if (!autoEnabled || !token || autoAuthBlocked) return
   clearTimeout(autoTimer)
-  autoTimer = setTimeout(runAuto, delay)
+  autoTimer = setTimeout(runAuto, Math.max(delay, autoNotBefore - Date.now()))
 }
 async function runAuto() {
   autoTimer = null
@@ -209,7 +210,7 @@ async function runAuto() {
 function setAuto(value) {
   localStorage.setItem(autoKey, String(value))
   autoEnabled = value
-  autoFailures = 0; autoAuthBlocked = false
+  autoFailures = 0; autoAuthBlocked = false; autoNotBefore = 0; autoGeneration++
   clearTimeout(autoTimer); autoTimer = null
   if (value) requestAuto(AUTO_DELAY)
   else if (!busy) $('status').textContent = 'Автообмен выключен'
@@ -238,8 +239,9 @@ async function sync(automatic = false) {
   if (!automatic) document.querySelector('.shell').inert = true
   $('status').textContent = automatic ? 'Автосинхронизация…' : 'Синхронизация…'
   let conflicts = 0, deferred = false, ok = false
+  const generation = autoGeneration
   const checkpoint = () => {
-    if (automatic && !autoEnabled) throw Object.assign(Error('Автообмен выключен'),{cancelled:true})
+    if (automatic && (!autoEnabled || generation !== autoGeneration)) throw Object.assign(Error('Автообмен выключен'),{cancelled:true})
     persistEditor()
   }
   try {
@@ -292,15 +294,20 @@ async function sync(automatic = false) {
         applySynced({...latest,base:result.revision,dirty:latest.text !== sentText})
       }
     }
-    ok = true; autoFailures = 0; autoAuthBlocked = false
+    ok = true; autoFailures = 0; autoAuthBlocked = false; autoNotBefore = 0
+    const pending = [...notes.values()].some(n=>n.dirty)
     $('status').textContent = conflicts ? 'Конфликтов: ' + conflicts :
-      deferred ? 'Есть изменения на сервере · закройте редактор для получения' : 'Синхронизировано'
+      deferred ? 'Есть изменения на сервере · закройте редактор для получения' :
+      pending ? 'Локальные изменения ожидают отправки' : 'Синхронизировано'
     if (conflicts && !automatic) alertText('Сохранены обе версии','Ваш текст в заметке «Конфликт». Проверьте его и нажмите синхронизацию ещё раз.')
   } catch(e) {
     if (automatic) {
       autoAuthBlocked = e.status === 401
-      autoFailures = Math.min(autoFailures+1,5)
-      $('status').textContent = e.cancelled ? 'Автообмен выключен' :
+      if (!e.cancelled) {
+        autoFailures = Math.min(autoFailures+1,5)
+        autoNotBefore = Date.now() + Math.min(15000 * 2 ** autoFailures, 300000)
+      }
+      $('status').textContent = e.cancelled ? (autoEnabled ? 'Автообмен ожидает запуска' : 'Автообмен выключен') :
         autoAuthBlocked ? 'Проверьте ключ сервера' : 'Автообмен отложен · локальные изменения сохранены'
     } else {
       $('status').textContent = 'Синхронизация прервана'
@@ -468,7 +475,7 @@ function start() {
     }
     if ($('settings').returnValue !== 'save') return
     token = $('key').value.trim(); localStorage.setItem('moroshka.key',token); sessionStorage.removeItem('moroshka.key')
-    autoAuthBlocked = false; autoFailures = 0
+    autoAuthBlocked = false; autoFailures = 0; autoNotBefore = 0
     if (token) sync(); else { clearTimeout(autoTimer); autoTimer = null; $('status').textContent = 'На этом устройстве' }
   })
   $('sync').onclick = () => sync().catch(report)
@@ -482,7 +489,10 @@ function start() {
     try { setAuto($('auto-sync').checked) }
     catch(e) { $('auto-sync').checked = autoEnabled; report(e) }
   }
-  window.addEventListener('online', () => { if (autoEnabled) requestAuto(AUTO_DELAY) })
+  window.addEventListener('online', () => {
+    autoNotBefore = 0; autoFailures = 0
+    if (autoEnabled) requestAuto(AUTO_DELAY)
+  })
   window.addEventListener('offline', () => {
     if (autoEnabled && !busy) $('status').textContent = 'Офлайн · локальные заметки сохранены'
   })

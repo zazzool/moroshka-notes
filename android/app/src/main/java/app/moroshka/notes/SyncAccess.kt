@@ -10,16 +10,21 @@ internal object SyncAccess {
     val localLock = Any()
     val exchange = ReentrantLock()
     private val owners = mutableSetOf<Any>()
+    @Volatile private var foregroundCount = 0
     private var generation = 0L
 
     fun enter(owner: Any) = synchronized(localLock) {
         if (owners.add(owner)) generation++
+        foregroundCount = owners.size
         Unit
     }
-    fun leave(owner: Any) = synchronized(localLock) { owners.remove(owner); Unit }
+    fun leave(owner: Any) = synchronized(localLock) { owners.remove(owner); foregroundCount = owners.size; Unit }
     fun epoch(): Long = synchronized(localLock) { generation }
     fun sameEpoch(epoch: Long): Boolean = synchronized(localLock) { generation == epoch }
-    fun backgroundLease(): Long? = synchronized(localLock) { if (owners.isEmpty()) generation else null }
+    fun backgroundLease(): Long? {
+        if (foregroundCount > 0) return null
+        return synchronized(localLock) { if (owners.isEmpty()) generation else null }
+    }
     fun backgroundAllowed(lease: Long): Boolean = synchronized(localLock) {
         owners.isEmpty() && generation == lease
     }
