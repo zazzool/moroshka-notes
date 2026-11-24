@@ -3,6 +3,8 @@ package app.moroshka.notes
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Typeface
+import android.os.Build
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.content.res.ColorStateList
@@ -19,6 +21,23 @@ class Design(context: Context) {
     val tint = color(if (dark) "#46334E" else "#F8E8F1")
     val gradient = intArrayOf(color("#B84F3B"), color("#794298"))
     private val density = context.resources.displayMetrics.density
+    val regular: Typeface = context.resources.getFont(R.font.manrope)
+    val medium: Typeface = if (Build.VERSION.SDK_INT >= 28) Typeface.create(regular, 500, false)
+        else Typeface.create(regular, Typeface.NORMAL)
+    val semibold: Typeface = if (Build.VERSION.SDK_INT >= 28) Typeface.create(regular, 600, false)
+        else Typeface.create(regular, Typeface.BOLD)
+
+    fun composer() = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+        if (dark) intArrayOf(color("#4E3546"), color("#42304D"))
+        else intArrayOf(color("#FFF6E9"), color("#FAE4FA"), color("#E9E8FF"))).apply {
+        cornerRadius = dp(24).toFloat()
+        setStroke(dp(1), border)
+    }
+
+    fun graphPanel() = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+        intArrayOf(color("#3B294E"), color("#211B32"), color("#543A67"))).apply {
+        cornerRadius = dp(20).toFloat()
+    }
 
     private fun color(value: String) = Color.parseColor(value)
     fun dp(value: Int) = (value * density + .5f).toInt()

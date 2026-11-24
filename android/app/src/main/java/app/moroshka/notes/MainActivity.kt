@@ -91,7 +91,7 @@ class MainActivity : Activity() {
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun label(text: String, size: Float) = TextView(this).apply {
         this.text = text; textSize = size; setTextColor(design.text)
-        if (size >= 18) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        typeface = if (size >= 18) design.semibold else design.regular
     }
     private val ink get() = design.text
     private val muted get() = design.muted
@@ -102,7 +102,8 @@ class MainActivity : Activity() {
         textSize = 14f
         setTextColor(ink)
         background = design.panel(pale, 16)
-        minHeight = dp(48)
+        minHeight = dp(48); minWidth = dp(48)
+        typeface = design.semibold
         stateListAnimator = null
         foreground = design.feedback()
         setPadding(dp(14), 0, dp(14), 0)
@@ -126,9 +127,36 @@ class MainActivity : Activity() {
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(height))
     }
     private fun landscape(): Int {
-        if (design.dark) return R.drawable.landscape_night
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        return if (hour in 17..21) R.drawable.landscape_sunset else R.drawable.landscape_dawn
+        return when {
+            design.dark || hour in 0..5 || hour >= 22 -> R.drawable.landscape_night
+            hour in 6..10 -> R.drawable.landscape_dawn
+            hour in 17..21 -> R.drawable.landscape_sunset
+            else -> R.drawable.landscape_cloudberry
+        }
+    }
+
+    private fun hero(): FrameLayout = FrameLayout(this).apply {
+        tag = "homeHero"
+        val largeText = resources.configuration.fontScale >= 1.3f
+        background = design.panel(design.surface, 20)
+        clipToOutline = true
+        addView(ImageView(this@MainActivity).apply {
+            setImageResource(landscape())
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(View(this@MainActivity).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x00000000, 0xE021172D.toInt()))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(label("Мысли в знания, идеи в проекты", if (largeText) 16f else 18f).apply {
+            setTextColor(Color.WHITE)
+            setPadding(dp(16), dp(8), dp(16), dp(10))
+            setShadowLayer(dp(2).toFloat(), 0f, 1f, 0xFF211B29.toInt())
+        }, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, android.view.Gravity.BOTTOM))
     }
     private fun safely(action: () -> Unit) {
         try { action() } catch (e: Exception) { notice(e.message ?: "Не удалось выполнить действие") }
@@ -152,6 +180,7 @@ class MainActivity : Activity() {
         val header = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
         header.addView(ImageView(this).apply {
             setImageResource(R.drawable.cloudberry)
+            scaleType = ImageView.ScaleType.FIT_CENTER
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(dp(40), dp(40)))
         val largeText = resources.configuration.fontScale >= 1.3f
@@ -216,6 +245,7 @@ class MainActivity : Activity() {
             val keyboardOpen = !isInMultiWindowMode && screenHeight - visible.bottom > dp(160)
             val visibility = if (keyboardOpen) View.GONE else View.VISIBLE
             if (nav.visibility != visibility) nav.visibility = visibility
+            content.findViewWithTag<View>("homeHero")?.let { if (it.visibility != visibility) it.visibility = visibility }
         }
         val observer = nav.viewTreeObserver
         observer.addOnGlobalLayoutListener(layoutListener)
@@ -234,9 +264,10 @@ class MainActivity : Activity() {
     }
 
     private fun homeContent(content: LinearLayout) {
-        content.addView(decorative(landscape(), 64), LinearLayout.LayoutParams(MATCH_PARENT, dp(64)).apply { bottomMargin = dp(12) })
+        val heroHeight = if (resources.configuration.fontScale >= 1.3f) 144 else 112
+        content.addView(hero(), LinearLayout.LayoutParams(MATCH_PARENT, dp(heroHeight)).apply { bottomMargin = dp(12) })
         val capture = column().apply {
-            background = design.panel(design.surface, 20, true)
+            background = design.composer()
             setPadding(dp(16), dp(16), dp(16), dp(16))
         }
         val field = EditText(this).apply {
@@ -245,6 +276,7 @@ class MainActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             gravity = android.view.Gravity.TOP
             textSize = 16f
+            typeface = design.regular
             setTextColor(design.text)
             setHintTextColor(design.muted)
             background = design.panel(design.background, 12, true)
@@ -319,7 +351,7 @@ class MainActivity : Activity() {
         val field = EditText(this).apply {
             hint = "Найти мысль или тему"
             contentDescription = "Поиск по заметкам"
-            setSingleLine(); setText(search); textSize = 16f
+            setSingleLine(); setText(search); textSize = 16f; typeface = design.regular
             setTextColor(design.text); setHintTextColor(design.muted)
             setPadding(dp(12), 0, dp(12), 0)
             background = design.panel(design.surface, 12, true)
@@ -331,8 +363,11 @@ class MainActivity : Activity() {
         fun refresh() {
             results.removeAllViews()
             val matches = notes.filter { it.text.contains(search, ignoreCase = true) }
-            if (matches.isEmpty()) results.addView(label(if (search.isBlank()) "Заметок пока нет." else "Совпадений нет. Попробуйте другое слово.", 16f).apply { setTextColor(muted) })
-            else matches.forEach { noteCard(results, it) }
+            if (matches.isEmpty()) {
+                results.addView(decorative(R.drawable.illustration_search, 112),
+                    LinearLayout.LayoutParams(MATCH_PARENT, dp(112)).apply { bottomMargin = dp(8) })
+                results.addView(label(if (search.isBlank()) "Заметок пока нет." else "Совпадений нет. Попробуйте другое слово.", 16f).apply { setTextColor(muted) })
+            } else matches.forEach { noteCard(results, it) }
         }
         changes(field) { search = field.text.toString(); refresh() }
         refresh()
@@ -369,7 +404,7 @@ class MainActivity : Activity() {
                 }
             }
             if (list.childCount == 0) {
-                if (!tasks) list.addView(decorative(R.drawable.illustration_knowledge, 100), LinearLayout.LayoutParams(MATCH_PARENT, dp(100)).apply { bottomMargin = dp(8) })
+                list.addView(decorative(if (tasks) R.drawable.illustration_balance else R.drawable.illustration_knowledge, 112), LinearLayout.LayoutParams(MATCH_PARENT, dp(112)).apply { bottomMargin = dp(8) })
                 list.addView(label(if (tasks) "Задач пока нет." else "Заметок пока нет.", 16f).apply { setTextColor(muted) })
             }
         }
@@ -398,7 +433,19 @@ class MainActivity : Activity() {
                     }.show()
                 true
             }
-            addView(label(note.title, 18f))
+            val heading = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+            heading.addView(ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.icon_note)
+                imageTintList = ColorStateList.valueOf(design.secondary)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                background = design.panel(design.tint, 12)
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
+            heading.addView(label(note.title, 18f).apply {
+                maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(heading)
             val preview = note.text.lines().filter { it.isNotBlank() && !it.startsWith("# ") }.joinToString(" ")
             if (preview.isNotBlank()) addView(label(preview, 16f).apply {
                 setTextColor(muted); maxLines = 2
@@ -409,8 +456,9 @@ class MainActivity : Activity() {
             contentDescription = listOf(note.title, preview, tags.joinToString(" ") { "#" + it })
                 .filter { it.isNotBlank() }.joinToString(". ")
             if (tags.isNotEmpty()) addView(label(tags.joinToString("  ") { "#$it" }, 13f).apply {
-                setTextColor(design.secondary); setPadding(0, dp(8), 0, 0); maxLines = 2
-            })
+                setTextColor(design.secondary); setPadding(dp(10), dp(5), dp(10), dp(5)); maxLines = 2
+                background = design.panel(design.tint, 12)
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(8) })
         }
         container.addView(entry, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
     }
@@ -419,13 +467,16 @@ class MainActivity : Activity() {
         section(content, "Связи")
         val notes = vault.recent()
         if (notes.isEmpty()) {
+            content.addView(decorative(R.drawable.illustration_connections, 120),
+                LinearLayout.LayoutParams(MATCH_PARENT, dp(120)).apply { bottomMargin = dp(8) })
             content.addView(label("Создайте заметки и свяжите их, чтобы увидеть граф.", 16f).apply { setTextColor(muted) })
             return
         }
         val graph = KnowledgeGraph(this, notes, { edit(it) }, { from, to ->
             notice("«" + from.title + "» содержит ссылку на «" + to.title + "».")
         })
-        graph.background = design.panel(design.surface, 20, true)
+        graph.background = design.graphPanel()
+        graph.clipToOutline = true
         content.addView(graph, LinearLayout.LayoutParams(MATCH_PARENT, dp(250)))
         if (notes.size > 16) content.addView(label("На графе показаны 16 недавних заметок. Полный список ниже.", 13f).apply { setTextColor(muted) })
         section(content, "Список заметок")
@@ -474,10 +525,12 @@ class MainActivity : Activity() {
     }
     private fun edit(note: Note, selectTitle: Boolean = false) {
         flush(); current = note.id; root.removeAllViews()
-        val bar = row(); root.addView(bar)
-        bar.addView(button("← Заметки") { flush(); library() })
-        bar.addView(button("Связи") { flush(); connections(vault.read(note.id)) })
-        bar.addView(button("⋯") {
+        val bar = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }; root.addView(bar)
+        bar.addView(button("Заметки") { flush(); library() }.apply { icon(R.drawable.icon_back) },
+            LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        bar.addView(button("Связи") { flush(); connections(vault.read(note.id)) }.apply { icon(R.drawable.icon_link) },
+            LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        bar.addView(button("") {
             flush()
             AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом")) { _, index ->
                 safely {
@@ -496,11 +549,12 @@ class MainActivity : Activity() {
                     }
                 }
             }.show()
-        }.apply { contentDescription = "Действия заметки" })
+        }.apply { icon(R.drawable.icon_more); contentDescription = "Действия заметки"; setPadding(0, 0, 0, 0) },
+            LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginStart = dp(8) })
         val field = EditText(this).apply {
             gravity = android.view.Gravity.TOP
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL); textSize = 16f; setText(note.text)
+            typeface = design.regular; textSize = 16f; setText(note.text)
             setTextColor(design.text)
             background = design.panel(design.surface, 20, true)
             setPadding(dp(16), dp(16), dp(16), dp(16)); setLineSpacing(dp(5).toFloat(), 1f)
@@ -579,8 +633,9 @@ class MainActivity : Activity() {
         lateinit var dialog: AlertDialog
         val graph = KnowledgeGraph(this, related, { target -> dialog.dismiss(); edit(target) }, { from, to ->
             notice("«" + from.title + "» содержит ссылку на «" + to.title + "».")
-        })
-        graph.background = design.panel(design.surface, 20, true)
+        }, centerFirst = true)
+        graph.background = design.graphPanel()
+        graph.clipToOutline = true
         container.addView(graph, LinearLayout.LayoutParams(MATCH_PARENT, dp(240)))
         related.forEach { target -> container.addView(button(target.title) { dialog.dismiss(); edit(target) }) }
         dialog = AlertDialog.Builder(this).setTitle("Связи заметки").setView(ScrollView(this).apply { addView(container) })

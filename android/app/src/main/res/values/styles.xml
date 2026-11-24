@@ -1,6 +1,6 @@
 <resources>
     <style name="MoroshkaTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
+        <item name="android:fontFamily">@font/manrope</item>
         <item name="android:colorAccent">#79518C</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">#FCF5F2</item>

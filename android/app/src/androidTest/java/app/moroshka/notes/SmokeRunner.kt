@@ -65,6 +65,14 @@ class SmokeRunner : Instrumentation() {
                 check(contrast(palette.muted, palette.background) >= 4.5)
                 check(palette.gradient.all { contrast(Color.WHITE, it) >= 4.5 })
             }
+            check(targetContext.resources.getFont(R.font.manrope) != null)
+            check(targetContext.getDrawable(R.mipmap.moroshka_launcher) is android.graphics.drawable.AdaptiveIconDrawable)
+            for (asset in listOf(R.drawable.cloudberry, R.drawable.landscape_cloudberry,
+                R.drawable.landscape_dawn, R.drawable.landscape_sunset, R.drawable.landscape_night,
+                R.drawable.illustration_ideas, R.drawable.illustration_knowledge,
+                R.drawable.illustration_connections, R.drawable.illustration_balance, R.drawable.illustration_search)) {
+                check(targetContext.getDrawable(asset) != null)
+            }
             val source = "# Исходный\n\nТекст #тег\n\n\u0060\u0060\u0060\n#код\n\u0060\u0060\u0060"
             check(MarkdownMetadata.tags(source) == listOf("тег"))
             check("#код" in MarkdownMetadata.remove(source, "тег"))
@@ -77,6 +85,7 @@ class SmokeRunner : Instrumentation() {
 
             runOnMainSync {
                 val root = activity.window.decorView
+                check(find(root) { it.tag == "homeHero" } != null)
                 val field = find(root) { it is EditText && it.contentDescription == "Текст новой заметки" } as EditText
                 field.setText(fixture)
                 val resultMethod = activity.javaClass.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType,

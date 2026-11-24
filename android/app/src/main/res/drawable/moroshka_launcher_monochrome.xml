@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native vector equivalent of cloudberry-mono-plum.svg. Flat, transparent, tintable. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.68" android:scaleY="0.68"
+        android:translateX="21.36" android:translateY="26.8">
+        <path android:fillColor="#00000000" android:strokeColor="#FF000000"
+            android:strokeWidth="3.1" android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M45,77c-1,-9 1,-14 5,-18M47,70C23,76 10,66 8,49c19,-1 31,7 39,21ZM48,73c21,5 34,-3 39,-17c-19,-3 -31,1 -39,17Z" />
+        <path android:fillColor="#00000000" android:strokeColor="#FF000000"
+            android:strokeWidth="3.1" android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M43,12c-1,-9 5,-12 11,-8c5,-2 10,1 9,7" />
+        <path android:fillColor="#00000000" android:strokeColor="#FF000000"
+            android:strokeWidth="3.1" android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M23,25a12,12 0,1 0,24 0a12,12 0,1 0,-24 0M43,24a12,12 0,1 0,24 0a12,12 0,1 0,-24 0M13,42a12,12 0,1 0,24 0a12,12 0,1 0,-24 0M33,43a13,13 0,1 0,26 0a13,13 0,1 0,-26 0M55,41a12,12 0,1 0,24 0a12,12 0,1 0,-24 0M23,60a12,12 0,1 0,24 0a12,12 0,1 0,-24 0M45,59a12,12 0,1 0,24 0a12,12 0,1 0,-24 0" />
+    </group>
+</vector>
