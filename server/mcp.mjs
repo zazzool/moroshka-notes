@@ -42,7 +42,8 @@ export function mcpResponse(body,headers,vault){
     return error(-32600,'Invalid Request',400)
   }
   if(body.method==='ping')return result({})
-  if(body.method==='tools/list')return result({tools})
+  const completed=value=>result(version===modern?{resultType:'complete',...value}:value)
+  if(body.method==='tools/list')return completed({tools})
   if(body.method!=='tools/call')return error(-32601,'Method not found',version===modern?404:200)
   const tool=tools.find(t=>t.name===params.name),args=params.arguments??{}
   if(!tool||!args||typeof args!=='object'||Array.isArray(args))return error(-32602,'Invalid tool or arguments')
@@ -56,12 +57,12 @@ export function mcpResponse(body,headers,vault){
   }else if(tool.name==='read_note'){
     if(typeof args.id!=='string'||!validId.test(args.id))return error(-32602,'Invalid UUID')
     data=vault.read(args.id)
-    if(!data)return result({content:[{type:'text',text:'Note not found'}],isError:true})
+    if(!data)return completed({content:[{type:'text',text:'Note not found'}],isError:true})
   }else{
     if(args.after!==undefined&&(typeof args.after!=='string'||!validId.test(args.after)))return error(-32602,'Invalid cursor')
     const rows=vault.manifest().notes.filter(n=>!args.after||n.id>args.after)
     const page=rows.slice(0,50).map(n=>{const note=vault.read(n.id);return {id:n.id,title:titleOf(note.text)}})
     data={notes:page,...(rows.length>50?{nextCursor:page.at(-1).id}:{})}
   }
-  return result({content:[{type:'text',text:JSON.stringify(data)}],isError:false})
+  return completed({content:[{type:'text',text:JSON.stringify(data)}],isError:false})
 }

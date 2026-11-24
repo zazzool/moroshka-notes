@@ -102,7 +102,12 @@ test('MCP modern and legacy read-only tools have an independent bearer scope',as
   assert.equal((await send('tools/list',{_meta:meta},modernHeaders)).status,400)
   const modern=await (await send('tools/call',{_meta:meta,name:'read_note',arguments:{id:note.id}},
     {'MCP-Protocol-Version':version,'Mcp-Method':'tools/call','Mcp-Name':'read_note'})).json()
+  assert.equal(modern.result.resultType,'complete')
   assert.equal(JSON.parse(modern.result.content[0].text).id,note.id)
+  const modernList=await (await send('tools/list',{_meta:meta},{'MCP-Protocol-Version':version,'Mcp-Method':'tools/list'})).json()
+  assert.equal(modernList.result.resultType,'complete')
+  assert.equal(modernList.result.tools.length,3)
+  assert.equal(list.result.resultType,undefined)
   assert.equal((await api('/mcp','GET',undefined,mcpToken)).status,405)
   assert.equal((await api('/mcp','POST',{jsonrpc:'2.0',method:'notifications/initialized'},mcpToken)).status,202)
 })
