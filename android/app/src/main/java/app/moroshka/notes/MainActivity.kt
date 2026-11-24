@@ -104,8 +104,31 @@ class MainActivity : Activity() {
         background = design.panel(pale, 16)
         minHeight = dp(48)
         stateListAnimator = null
+        foreground = design.feedback()
         setPadding(dp(14), 0, dp(14), 0)
         setOnClickListener { safely(action) }
+    }
+    private fun Button.icon(resource: Int, color: Int = design.text, above: Boolean = false) {
+        val drawable = getDrawable(resource)!!.mutate().apply {
+            setTint(color)
+            setBounds(0, 0, dp(20), dp(20))
+        }
+        if (above) setCompoundDrawables(null, drawable, null, null)
+        else setCompoundDrawablesRelative(drawable, null, null, null)
+        compoundDrawablePadding = dp(4)
+    }
+    private fun decorative(resource: Int, height: Int) = ImageView(this).apply {
+        setImageResource(resource)
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        background = design.panel(design.surface, 16)
+        clipToOutline = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(height))
+    }
+    private fun landscape(): Int {
+        if (design.dark) return R.drawable.landscape_night
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return if (hour in 17..21) R.drawable.landscape_sunset else R.drawable.landscape_dawn
     }
     private fun safely(action: () -> Unit) {
         try { action() } catch (e: Exception) { notice(e.message ?: "Не удалось выполнить действие") }
@@ -127,13 +150,24 @@ class MainActivity : Activity() {
         editor = null
         root.removeAllViews()
         val header = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        header.addView(ImageView(this).apply { setImageResource(R.drawable.berry) }, LinearLayout.LayoutParams(dp(36), dp(36)))
-        header.addView(label("Морошка", 24f).apply { setPadding(dp(10), 0, 0, 0) },
+        header.addView(ImageView(this).apply {
+            setImageResource(R.drawable.cloudberry)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(40), dp(40)))
+        val largeText = resources.configuration.fontScale >= 1.3f
+        header.addView(label("Морошка", if (largeText) 18f else 24f).apply {
+            setPadding(dp(10), 0, 0, 0)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            contentDescription = "Морошка"
+        },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        header.addView(button("⌕") { page = "search"; library() }.apply {
+        header.addView(button("") { page = "search"; library() }.apply {
+            icon(R.drawable.icon_search)
             contentDescription = "Поиск"; setPadding(0, 0, 0, 0)
         }, LinearLayout.LayoutParams(dp(48), dp(48)))
-        header.addView(button("⋯") { menu() }.apply {
+        header.addView(button("") { menu() }.apply {
+            icon(R.drawable.icon_more)
             contentDescription = "Действия библиотеки"; setPadding(0, 0, 0, 0)
         }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginStart = dp(8) })
         root.addView(header)
@@ -147,17 +181,26 @@ class MainActivity : Activity() {
             "links" -> linksContent(content)
             else -> libraryContent(content)
         }
-        val nav = row().apply {
+        val nav = column().apply {
             background = design.panel(design.surface, 20, true)
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
         val items = listOf("home" to "Главная", "search" to "Поиск", "links" to "Связи", "library" to "Библиотека")
-        for ((destination, name) in items) {
-            nav.addView(button(name) { page = destination; library() }.apply {
+        val navRows = if (largeText) items.chunked(2) else listOf(items)
+        for (itemsInRow in navRows) {
+            val navRow = row()
+            nav.addView(navRow, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            for ((destination, name) in itemsInRow) navRow.addView(button(name) { page = destination; library() }.apply {
                 textSize = 13f
                 setPadding(dp(2), dp(4), dp(2), dp(4))
                 minHeight = dp(48)
                 maxLines = 2
+                icon(when (destination) {
+                    "home" -> R.drawable.icon_home
+                    "search" -> R.drawable.icon_search
+                    "links" -> R.drawable.icon_graph
+                    else -> R.drawable.icon_library
+                }, if (page == destination) design.secondary else design.text, above = !largeText)
                 isSelected = page == destination
                 background = design.panel(if (page == destination) design.tint else design.surface, 16)
                 contentDescription = if (page == destination) "$name, выбранный раздел" else name
@@ -173,6 +216,7 @@ class MainActivity : Activity() {
     }
 
     private fun homeContent(content: LinearLayout) {
+        content.addView(decorative(landscape(), 64), LinearLayout.LayoutParams(MATCH_PARENT, dp(64)).apply { bottomMargin = dp(12) })
         val capture = column().apply {
             background = design.panel(design.surface, 20, true)
             setPadding(dp(16), dp(16), dp(16), dp(16))
@@ -195,11 +239,15 @@ class MainActivity : Activity() {
             captureDraft = field.text.toString()
             drafts.edit().putString("text", captureDraft).apply()
         }
-        val actions = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        actions.addView(button("Голос") { voiceInput(5) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        val largeText = resources.configuration.fontScale >= 1.3f
+        val actions = (if (largeText) column() else row()).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        actions.addView(button("Голос") { voiceInput(5) }.apply { icon(R.drawable.icon_mic) },
+            if (largeText) LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT) else LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         actions.addView(button("Сохранить") { saveCapture() }.apply {
             background = design.primary(); setTextColor(Color.WHITE)
-        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+            icon(R.drawable.icon_check, Color.WHITE)
+        }, (if (largeText) LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+            else LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) }))
         capture.addView(actions, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
         content.addView(capture)
         if (!DocumentBackup(this).configured) {
@@ -217,7 +265,10 @@ class MainActivity : Activity() {
         }
         section(content, "Недавние")
         val recent = vault.recent()
-        if (recent.isEmpty()) content.addView(label("Здесь появится ваша первая заметка.", 16f).apply { setTextColor(muted) })
+        if (recent.isEmpty()) {
+            content.addView(decorative(R.drawable.illustration_ideas, 90), LinearLayout.LayoutParams(MATCH_PARENT, dp(90)).apply { bottomMargin = dp(8) })
+            content.addView(label("Здесь появится ваша первая заметка.", 16f).apply { setTextColor(muted) })
+        }
         else {
             recent.take(4).forEach { noteCard(content, it) }
             content.addView(button("Все заметки") { page = "library"; tasks = false; library() },
@@ -299,7 +350,10 @@ class MainActivity : Activity() {
                     })
                 }
             }
-            if (list.childCount == 0) list.addView(label(if (tasks) "Задач пока нет." else "Заметок пока нет.", 16f).apply { setTextColor(muted) })
+            if (list.childCount == 0) {
+                if (!tasks) list.addView(decorative(R.drawable.illustration_knowledge, 100), LinearLayout.LayoutParams(MATCH_PARENT, dp(100)).apply { bottomMargin = dp(8) })
+                list.addView(label(if (tasks) "Задач пока нет." else "Заметок пока нет.", 16f).apply { setTextColor(muted) })
+            }
         }
         refresh()
         content.addView(button("Синхронизировать") {
@@ -312,6 +366,7 @@ class MainActivity : Activity() {
     private fun noteCard(container: LinearLayout, note: Note) {
         val entry = column().apply {
             background = design.panel(design.surface, 20, true)
+            foreground = design.feedback()
             setPadding(dp(16), dp(16), dp(16), dp(16))
             minimumHeight = dp(48); isFocusable = true
             setOnClickListener { edit(note) }
@@ -442,12 +497,12 @@ class MainActivity : Activity() {
             addView(tools)
         }
         root.addView(toolScroll)
-        tools.addView(button("＋ Связь") { insertLink() })
-        tools.addView(button("Теги") { manageTags() }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
-        tools.addView(button("Граф") { flush(); showLocalGraph(vault.read(note.id)) },
+        tools.addView(button("＋ Связь") { insertLink() }.apply { icon(R.drawable.icon_link) })
+        tools.addView(button("Теги") { manageTags() }.apply { icon(R.drawable.icon_tag) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
+        tools.addView(button("Граф") { flush(); showLocalGraph(vault.read(note.id)) }.apply { icon(R.drawable.icon_graph) },
             LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         tools.addView(button("Место") { choosePlace() }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
-        tools.addView(button("Голос") { voiceInput() }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
+        tools.addView(button("Голос") { voiceInput() }.apply { icon(R.drawable.icon_mic) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         changes(field) { dirty = true; handler.removeCallbacks(autoSave); handler.postDelayed(autoSave, 350) }
     }
     private fun renameTitle() {

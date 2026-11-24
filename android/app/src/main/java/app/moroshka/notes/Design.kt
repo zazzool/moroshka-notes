@@ -4,10 +4,12 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
 
 /** Colors and dimensions follow docs/design/tokens.json. */
 class Design(context: Context) {
-    private val dark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    val dark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
     val background = color(if (dark) "#211B29" else "#FCF5F2")
     val surface = color(if (dark) "#302638" else "#FFFFFF")
     val text = color(if (dark) "#FFF4F5" else "#48374E")
@@ -28,4 +30,5 @@ class Design(context: Context) {
     fun primary() = GradientDrawable(GradientDrawable.Orientation.TL_BR, gradient).apply {
         cornerRadius = dp(16).toFloat()
     }
+    fun feedback() = RippleDrawable(ColorStateList.valueOf(if (dark) 0x33FFFFFF else 0x3348374E), null, panel(Color.WHITE, 16))
 }
