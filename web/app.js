@@ -8,6 +8,9 @@ let selected, view = 'notes', dirtyEditor = false, busy = false
 let token = localStorage.getItem('moroshka.key') || sessionStorage.getItem('moroshka.key') || ''
 let pairingGeneration = 0
 let activePairing = null
+let archiveGeneration = 0
+let archiveText = null
+let archiveSourceId = null
 const title = n => n.text.match(/^#\s+(.+)$/m)?.[1].trim() || 'Без названия'
 const links = text => [...text.matchAll(/\[\[([^\]\n]+)\]\]/g)].map(m => m[1].trim())
 const norm = text => text.trim().toLocaleLowerCase()
@@ -214,6 +217,80 @@ async function sync() {
   } catch(e) { $('status').textContent = 'Синхронизация прервана'; report(e) }
   finally { busy = false; document.querySelector('.shell').inert = false; select(selected) }
 }
+// History is the server's saved revisions, not a substitute for offline draft storage.
+async function openServerArchive(kind, id = null) {
+  if (busy) return
+  if (!token) return alertText('Подключите сервер','История и корзина сервера доступны после подключения.')
+  try { persistEditor() } catch(e) { report(e); return }
+  const dialog = $('server-archive')
+  const generation = ++archiveGeneration
+  archiveText = null; archiveSourceId = null
+  $('archive-title').textContent = kind === 'trash' ? 'Корзина сервера' : 'История сервера'
+  $('archive-hint').textContent = kind === 'trash'
+    ? 'Удалённые заметки остаются в корзине. Восстановление создаёт новый UUID.'
+    : 'Предыдущие синхронизированные редакции. Локальные несинхронизированные правки здесь не отображаются.'
+  $('archive-status').textContent = 'Загрузка…'
+  $('archive-items').replaceChildren()
+  $('archive-preview').textContent = ''; $('archive-preview').hidden = true
+  $('archive-copy').disabled = true; $('archive-history').hidden = true
+  if (!dialog.open) dialog.showModal()
+  const active = () => dialog.open && archiveGeneration === generation
+  try {
+    const result = await api(kind === 'trash' ? '/api/trash' : '/api/history/'+id)
+    if (!active()) return
+    const rows = kind === 'trash' ? result.notes : result.revisions
+    $('archive-status').textContent = rows.length ? 'Выберите запись для просмотра.' : 'Нет сохранённых записей.'
+    for (const row of rows) {
+      const date = new Date(kind === 'trash' ? row.modifiedAt : row.archivedAt).toLocaleString('ru-RU')
+      const name = kind === 'trash' ? row.title+' · '+date : date+' · '+row.revision.slice(0,10)
+      const button = el('button', name, 'archive-entry')
+      button.type = 'button'
+      button.onclick = async () => {
+        if (!active()) return
+        for (const item of $('archive-items').querySelectorAll('button')) item.disabled = true
+        archiveText = null; archiveSourceId = null
+        $('archive-copy').disabled = true; $('archive-history').hidden = true
+        $('archive-preview').textContent = ''; $('archive-preview').hidden = true
+        $('archive-status').textContent = 'Загрузка текста…'
+        try {
+          const note = await api(kind === 'trash' ? '/api/trash/'+row.id : '/api/history/'+id+'/'+row.revision)
+          if (!active()) return
+          if (typeof note.text !== 'string') throw Error('Некорректный ответ сервера')
+          archiveText = note.text
+          archiveSourceId = kind === 'trash' ? row.id : null
+          $('archive-preview').textContent = note.text
+          $('archive-preview').hidden = false
+          $('archive-copy').disabled = false
+          $('archive-history').hidden = kind !== 'trash'
+          $('archive-status').textContent = 'Исходная заметка не изменится.'
+        } catch(e) {
+          if (active()) $('archive-status').textContent = e.message
+        } finally {
+          if (active()) for (const item of $('archive-items').querySelectorAll('button')) item.disabled = false
+        }
+      }
+      $('archive-items').append(button)
+    }
+  } catch(e) {
+    if (active()) $('archive-status').textContent = e.status === 404
+      ? 'История недоступна. Обновите сервер Морошки.' : e.message
+  }
+}
+async function deleteSyncedNote() {
+  if (busy || !selected) return
+  try { persistEditor() } catch(e) { report(e); return }
+  const n = notes.get(selected)
+  if (!token || !n || n.dirty || !n.base)
+    return alertText('Сначала синхронизируйте заметку','В корзину сервера можно переместить только синхронизированную редакцию. Несохранённый текст не удаляется.')
+  if (!confirm('Переместить заметку в корзину сервера? Удаление распространится на другие устройства после синхронизации.')) return
+  await archiveOperation(async () => {
+    await api('/api/notes/'+n.id,'DELETE',{base:n.base})
+    localStorage.removeItem(prefix+n.id)
+    notes.delete(n.id)
+    select(null)
+    $('status').textContent = 'Заметка перемещена в корзину'
+  })
+}
 async function archiveOperation(operation) {
   if (busy) return
   try { persistEditor() } catch(e) { report(e); return }
@@ -293,6 +370,24 @@ function start() {
   $('export').onclick = () => {
     const a = document.createElement('a'); const url = URL.createObjectURL(new Blob([$('body').value],{type:'text/markdown'}))
     a.href = url; a.download = title(notes.get(selected)).replace(/[^\p{L}\p{N} _-]/gu,'_').slice(0,100)+'.md'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000)
+  }
+  $('history').onclick = () => openServerArchive('history',selected)
+  $('trash').onclick = () => openServerArchive('trash')
+  $('delete-note').onclick = deleteSyncedNote
+  $('server-archive').addEventListener('close', () => {
+    archiveGeneration++; archiveText = null; archiveSourceId = null
+    $('archive-preview').textContent = ''; $('archive-items').replaceChildren()
+  })
+  $('archive-history').onclick = () => {
+    if (archiveSourceId) openServerArchive('history',archiveSourceId)
+  }
+  $('archive-copy').onclick = () => {
+    if (archiveText === null) return
+    try {
+      const note = create(archiveText)
+      $('server-archive').close()
+      select(note.id)
+    } catch(e) { $('archive-status').textContent = e.message }
   }
   $('backup-export').onclick = () => {
     if ($('capture-text').value.trim()) return alertText('Сохраните черновик','В архив входят только сохранённые заметки.')

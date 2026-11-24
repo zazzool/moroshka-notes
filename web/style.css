@@ -88,3 +88,12 @@ details{margin:18px 0}summary{cursor:pointer;min-height:48px;padding:12px 0}deta
 .archive-menu p{font-size:12px;color:var(--muted);margin:0 0 8px}
 .archive-menu button{display:block;width:100%;text-align:left;margin:6px 0;font-size:13px}
 @media(max-width:680px){.archive-menu{grid-column:1/-1}.archive-menu button{width:100%;text-align:center}}
+
+.trash-action{text-align:left;font-size:13px}
+#server-archive{width:min(600px,94vw);max-height:90dvh;overflow:auto}
+#archive-hint,#archive-status{font-size:13px;color:var(--muted)}
+#archive-items{display:grid;gap:8px;max-height:26vh;overflow:auto}
+.archive-entry{text-align:left;overflow-wrap:anywhere}
+#archive-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:35vh;overflow:auto;padding:16px;border-radius:16px;background:var(--bg);font:14px/1.6 Manrope,system-ui,sans-serif}
+#server-archive .row{margin-top:10px}
+@media(max-width:680px){.trash-action{grid-column:1/-1;text-align:center}}

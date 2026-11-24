@@ -499,7 +499,7 @@ class MainActivity : Activity() {
         }
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива", "Корзина на устройстве")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
             else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
@@ -516,15 +516,54 @@ class MainActivity : Activity() {
                             .addCategory(Intent.CATEGORY_OPENABLE)
                             .putExtra(Intent.EXTRA_TITLE, "Moroshka-backup.json"), 6)
                     }.show()
-            } else {
+            } else if (index == 7) {
                 AlertDialog.Builder(this).setMessage("Восстановление добавит заметки. Существующие записи не будут перезаписаны; конфликтующие версии сохранятся отдельно.")
                     .setNegativeButton("Отмена", null)
                     .setPositiveButton("Выбрать архив") { _, _ ->
                         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
                             .addCategory(Intent.CATEGORY_OPENABLE), 7)
                     }.show()
-            }
+            } else safely { showTrash() }
         }.show()
+    }
+
+    private fun showTrash() {
+        val items = vault.trashEntries()
+        if (items.isEmpty()) return notice("Локальная корзина пуста.")
+        val format = java.text.DateFormat.getDateTimeInstance()
+        val names = items.map { it.title + "\n" + format.format(java.util.Date(it.modifiedAt)) }
+        AlertDialog.Builder(this).setTitle("Корзина на устройстве")
+            .setItems(names.toTypedArray()) { _, index -> safely {
+                val item = items[index]
+                previewRevision(item.title, vault.trashText(item.name))
+            } }.setNegativeButton("Закрыть", null).show()
+    }
+
+    private fun showVersions(id: String) {
+        flush()
+        val versions = vault.versions(id)
+        if (versions.isEmpty()) return notice("На этом устройстве пока нет предыдущих сохранённых редакций.")
+        val format = java.text.DateFormat.getDateTimeInstance()
+        val names = versions.map { format.format(java.util.Date(it.archivedAt)) + " · " + it.revision.take(10) }
+        AlertDialog.Builder(this).setTitle("История на устройстве")
+            .setItems(names.toTypedArray()) { _, index -> safely {
+                previewRevision("Предыдущая редакция", vault.versionText(id, versions[index].revision))
+            } }.setNegativeButton("Закрыть", null).show()
+    }
+
+    private fun previewRevision(title: String, content: String) {
+        val scroll = ScrollView(this)
+        scroll.addView(label(content, 16f).apply {
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setTextIsSelectable(true)
+        })
+        AlertDialog.Builder(this).setTitle(title).setView(scroll)
+            .setNegativeButton("Закрыть", null)
+            .setPositiveButton("Сохранить копию") { _, _ -> safely {
+                // Never resurrect an old UUID or overwrite the current note.
+                flush()
+                edit(vault.create(content))
+            } }.show()
     }
 
     private fun archiveWork(message: String, operation: () -> String) {
@@ -568,7 +607,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         bar.addView(button("") {
             flush()
-            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом")) { _, index ->
+            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом", "История на устройстве")) { _, index ->
                 safely {
                     when (index) {
                         0 -> renameTitle()
@@ -582,6 +621,7 @@ class MainActivity : Activity() {
                         }
                         5 -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
                             .putExtra(Intent.EXTRA_TEXT, editor?.text.toString()), "Поделиться заметкой"))
+                        6 -> showVersions(note.id)
                     }
                 }
             }.show()

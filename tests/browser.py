@@ -65,6 +65,59 @@ def backup_check(origin, browser):
     first.close()
 
 
+def history_check(origin, browser):
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.goto(origin)
+    connect(page)
+    page.locator("#new").click()
+    original = "# История теста\n\nИсходная редакция"
+    changed = "# История теста\n\nНовая редакция"
+    page.get_by_label("Markdown").fill(original)
+    page.locator("#sync").click()
+    expect(page.locator("#status")).to_have_text("Синхронизировано")
+    page.get_by_label("Markdown").fill(changed)
+    page.locator("#delete-note").click()
+    expect(page.locator("#msgTitle")).to_have_text("Сначала синхронизируйте заметку")
+    page.get_by_role("button", name="Закрыть", exact=True).click()
+    page.locator("#sync").click()
+    expect(page.locator("#status")).to_have_text("Синхронизировано")
+    page.locator("#history").click()
+    expect(page.locator("#archive-title")).to_have_text("История сервера")
+    expect(page.locator("#archive-items button")).to_have_count(1)
+    page.locator("#archive-items button").first.click()
+    expect(page.locator("#archive-preview")).to_have_text(original)
+    page.locator("#archive-copy").click()
+    expect(page.get_by_label("Markdown")).to_have_value(original)
+    page.locator("#sync").click()
+    expect(page.locator("#status")).to_have_text("Синхронизировано")
+    page.get_by_role("button", name="Закрыть редактор").click()
+    page.locator("#items .note").filter(has_text="Новая редакция").click()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.locator("#delete-note").click()
+    expect(page.locator("#status")).to_have_text("Заметка перемещена в корзину")
+    expect(page.locator("#items .note").filter(has_text="Новая редакция")).to_have_count(0)
+    page.locator("#trash").click()
+    page.locator("#archive-items button").filter(has_text="История теста").click()
+    expect(page.locator("#archive-preview")).to_have_text(changed)
+    page.locator("#archive-history").click()
+    expect(page.locator("#archive-title")).to_have_text("История сервера")
+    page.locator("#archive-items button").first.click()
+    expect(page.locator("#archive-preview")).to_have_text(original)
+    page.locator("#server-archive").get_by_role("button", name="Закрыть", exact=True).click()
+    page.locator("#trash").click()
+    page.locator("#archive-items button").filter(has_text="История теста").click()
+    expect(page.locator("#archive-preview")).to_have_text(changed)
+    page.locator("#archive-copy").click()
+    expect(page.get_by_label("Markdown")).to_have_value(changed)
+    page.locator("#sync").click()
+    expect(page.locator("#status")).to_have_text("Синхронизировано")
+    page.get_by_role("button", name="Закрыть редактор").click()
+    expect(page.locator("#items .note").filter(has_text="Исходная редакция")).to_have_count(1)
+    expect(page.locator("#items .note").filter(has_text="Новая редакция")).to_have_count(1)
+    ctx.close()
+
+
 def check(origin):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
@@ -146,6 +199,7 @@ def check(origin):
         desktop.reload()
         desktop.locator("#sync").click()
         expect(desktop.locator("#status")).to_have_text("Синхронизировано", timeout=10000)
+        history_check(origin, browser)
         browser.close()
 
 

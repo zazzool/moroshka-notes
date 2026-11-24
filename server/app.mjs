@@ -138,6 +138,16 @@ export function application(options, request = fetch) {
       } else if (pathname.startsWith('/api/')) {
         requireKey(req, token)
         if (get && pathname === '/api/notes') return json(res, 200, { notes: vault.list(), deleted: vault.deleted() })
+        if (get && pathname === '/api/trash') return json(res, 200, { notes: vault.trashList() })
+        if (get && pathname.startsWith('/api/trash/')) {
+          return json(res, 200, vault.trashRead(pathname.slice('/api/trash/'.length)))
+        }
+        if (get && pathname.startsWith('/api/history/')) {
+          const segments = pathname.slice('/api/history/'.length).split('/')
+          if (segments.length === 1) return json(res, 200, { revisions: vault.history(segments[0]) })
+          if (segments.length === 2) return json(res, 200, vault.historyRead(segments[0], segments[1]))
+          throw new ApiError(400, 'Некорректный путь редакции')
+        }
         if (req.method === 'PUT' && pathname.startsWith('/api/notes/')) {
           const input = await payload(req)
           return json(res, 200, vault.put(pathname.slice('/api/notes/'.length), input))
