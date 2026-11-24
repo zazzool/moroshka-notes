@@ -72,7 +72,7 @@ class MainActivity : Activity() {
         if (restore != null) edit(vault.read(restore)) else library()
         if (state == null) receive(intent)
     }
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); receive(intent) }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); SyncAccess.enter(syncOwner); receive(intent) }
     private fun receive(intent: Intent) {
         if (intent.action != Intent.ACTION_SEND) return
         val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
@@ -1055,6 +1055,7 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
         if (resultCode != RESULT_OK) return
+        SyncAccess.enter(syncOwner)
         if (requestCode == 5) {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
             captureDraft = if (captureDraft.isBlank()) spoken else "$captureDraft $spoken"

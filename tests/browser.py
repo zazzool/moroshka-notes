@@ -118,6 +118,60 @@ def history_check(origin, browser):
     ctx.close()
 
 
+def auto_sync_check(origin, browser):
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.goto(origin)
+    connect(page)
+    page.locator("#new").click()
+    original = "# Автообмен тест\n\nПервая редакция"
+    newer = "# Автообмен тест\n\nПравка во время передачи"
+    page.get_by_label("Markdown").fill(original)
+    # Delay the first upload while typing in the same open editor.
+    sent = []
+    def delay_upload(route):
+        req = route.request
+        data = req.post_data_json if req.method == "PUT" else None
+        if req.method == "PUT" and not sent and data and data.get("text") == original:
+            sent.append(req.url)
+            page.get_by_label("Markdown").fill(newer)
+            assert page.get_by_label("Markdown").is_editable()
+        route.continue_()
+    page.route("**/api/notes/*", delay_upload)
+    page.get_by_label("Автосинхронизация", exact=True).check()
+    expect(page.locator("#status")).to_have_text("Синхронизировано", timeout=20000)
+    assert sent
+    expect(page.get_by_label("Markdown")).to_have_value(newer)
+    expect(page.locator("#saved")).to_have_text("Синхронизировано", timeout=20000)
+    # An offline edit persists locally, and connectivity resumes the exchange.
+    ctx.set_offline(True)
+    offline = "# Автообмен тест\n\nОфлайн правка"
+    page.get_by_label("Markdown").fill(offline)
+    expect(page.get_by_label("Markdown")).to_have_value(offline)
+    expect(page.locator("#saved")).to_have_text("Сохранено на устройстве")
+    ctx.set_offline(False)
+    expect(page.locator("#saved")).to_have_text("Синхронизировано", timeout=20000)
+    response = ctx.request.get(origin+"/api/notes", headers={"Authorization":"Bearer "+KEY})
+    assert any(n["text"] == offline for n in response.json()["notes"])
+    # Concurrent remote edit must not overwrite an open editor.
+    remote = next(n for n in response.json()["notes"] if n["text"] == offline)
+    server_text = "# Автообмен тест\n\nСерверная редакция"
+    reply = ctx.request.put(origin+"/api/notes/"+remote["id"], headers={"Authorization":"Bearer "+KEY},
+                            data={"base":remote["revision"],"text":server_text})
+    assert reply.status == 200
+    local_text = "# Автообмен тест\n\nНовая локальная редакция"
+    page.get_by_label("Markdown").fill(local_text)
+    expect(page.locator("#status")).to_contain_text("закройте редактор", timeout=20000)
+    expect(page.get_by_label("Markdown")).to_have_value(local_text)
+    page.get_by_role("button", name="Закрыть редактор").click()
+    expect(page.locator("#items .note").filter(has_text="Серверная редакция")).to_have_count(1, timeout=20000)
+    expect(page.locator("#items .note").filter(has_text="Новая локальная редакция")).to_have_count(1)
+    page.get_by_label("Автосинхронизация", exact=True).uncheck()
+    page.reload()
+    expect(page.get_by_label("Автосинхронизация", exact=True)).not_to_be_checked()
+    ctx.close()
+
+
 def check(origin):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
@@ -200,6 +254,7 @@ def check(origin):
         desktop.locator("#sync").click()
         expect(desktop.locator("#status")).to_have_text("Синхронизировано", timeout=10000)
         history_check(origin, browser)
+        auto_sync_check(origin, browser)
         browser.close()
 
 

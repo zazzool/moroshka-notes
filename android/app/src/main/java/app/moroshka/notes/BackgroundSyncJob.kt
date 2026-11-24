@@ -47,7 +47,7 @@ internal object BackgroundSync {
     fun configure(context: Context, value: Boolean) {
         if (value) require(credentials(context) != null) { "Сначала подключите сервер." }
         check(prefs(context).edit().putBoolean(enabledKey, value).commit()) { "Не удалось сохранить настройку" }
-        val scheduler = context.getSystemService(JobScheduler::class.java)
+        val scheduler = requireNotNull(context.getSystemService(JobScheduler::class.java))
         if (!value) {
             scheduler.cancel(periodicId); scheduler.cancel(onceId)
             return
@@ -61,7 +61,7 @@ internal object BackgroundSync {
     }
     fun schedule(context: Context) {
         if (!enabled(context) || credentials(context) == null) return
-        val scheduler = context.getSystemService(JobScheduler::class.java)
+        val scheduler = requireNotNull(context.getSystemService(JobScheduler::class.java))
         fun builder(id: Int) = JobInfo.Builder(id, ComponentName(context, BackgroundSyncJob::class.java))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
             .setRequiresBatteryNotLow(true)
