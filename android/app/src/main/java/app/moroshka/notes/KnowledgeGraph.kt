@@ -2,6 +2,9 @@ package app.moroshka.notes
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
@@ -14,7 +17,8 @@ class KnowledgeGraph(
     context: Context,
     notes: List<Note>,
     private val open: (Note) -> Unit,
-    private val explain: (Note, Note) -> Unit
+    private val explain: (Note, Note) -> Unit,
+    private val centerFirst: Boolean = false
 ) : View(context) {
     private val design = Design(context)
     private val nodes = notes.take(16)
@@ -46,12 +50,16 @@ class KnowledgeGraph(
         val radiusY = (height / 2f - design.dp(40)).coerceAtLeast(0f)
         positions.clear()
         nodes.indices.forEach { index ->
-            val angle = 2 * Math.PI * index / nodes.size - Math.PI / 2
-            positions.add((cx + radiusX * cos(angle)).toFloat() to (cy + radiusY * sin(angle)).toFloat())
+            if (nodes.size == 1 || (centerFirst && index == 0)) positions.add(cx to cy)
+            else {
+                val offset = if (centerFirst) 1 else 0
+                val angle = 2 * Math.PI * (index - offset) / (nodes.size - offset) - Math.PI / 2
+                positions.add((cx + radiusX * cos(angle)).toFloat() to (cy + radiusY * sin(angle)).toFloat())
+            }
         }
-        paint.color = design.secondary
+        paint.color = Color.parseColor("#E3BDF5")
         paint.strokeWidth = design.dp(2).toFloat()
-        paint.alpha = 120
+        paint.alpha = 165
         edges.forEach { (from, to) ->
             val a = positions[from]
             val b = positions[to]
@@ -59,13 +67,27 @@ class KnowledgeGraph(
         }
         paint.alpha = 255
         positions.forEachIndexed { index, point ->
-            paint.color = design.tint
-            canvas.drawCircle(point.first, point.second, design.dp(17).toFloat(), paint)
-            paint.color = design.secondary
+            val highlighted = centerFirst && index == 0
+            val radius = design.dp(if (highlighted) 20 else 17).toFloat()
+            val colors = if (highlighted) intArrayOf(0xFFFFC180.toInt(), 0xFFB84F3B.toInt())
+                else intArrayOf(0xFFC9A1EC.toInt(), 0xFF79518C.toInt())
+            paint.shader = RadialGradient(point.first - radius / 4, point.second - radius / 4,
+                radius * 1.4f, colors, null, Shader.TileMode.CLAMP)
+            canvas.drawCircle(point.first, point.second, radius, paint)
+            paint.shader = null
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = design.dp(1).toFloat()
+            paint.color = 0xFFEED0FF.toInt()
+            canvas.drawCircle(point.first, point.second, radius, paint)
+            paint.style = Paint.Style.FILL
+            paint.color = Color.WHITE
+            paint.typeface = design.medium
             paint.textAlign = Paint.Align.CENTER
             paint.textSize = design.dp(13).toFloat()
             val name = android.text.TextUtils.ellipsize(nodes[index].title, android.text.TextPaint(paint), design.dp(90).toFloat(), android.text.TextUtils.TruncateAt.END)
-            canvas.drawText(name.toString(), point.first, point.second + design.dp(30), paint)
+            paint.setShadowLayer(design.dp(2).toFloat(), 0f, 1f, 0xFF211B29.toInt())
+            canvas.drawText(name.toString(), point.first, point.second + design.dp(32), paint)
+            paint.clearShadowLayer()
         }
     }
 

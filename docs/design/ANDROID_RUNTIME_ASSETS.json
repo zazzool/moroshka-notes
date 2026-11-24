@@ -1,0 +1,98 @@
+{
+  "source": "docs/design/assets",
+  "description": "Byte-for-byte runtime copies; artwork masters stay in the handoff.",
+  "copies": [
+    {
+      "source": "docs/design/assets/raster/brand/cloudberry-3d.png",
+      "path": "android/app/src/main/res/drawable-nodpi/cloudberry.png"
+    },
+    {
+      "source": "docs/design/assets/raster/backgrounds/mountain-dawn-landscape.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/landscape_dawn.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/backgrounds/lake-sunset-landscape.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/landscape_sunset.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/backgrounds/starry-night-landscape.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/landscape_night.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/backgrounds/cloudberry-landscape-landscape.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/landscape_cloudberry.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/idea-tree.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/illustration_ideas.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/knowledge-book.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/illustration_knowledge.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/neural-network.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/illustration_connections.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/balance-stones.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/illustration_balance.webp"
+    },
+    {
+      "source": "docs/design/assets/raster/illustrations/brain-glow.webp",
+      "path": "android/app/src/main/res/drawable-nodpi/illustration_search.webp"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/drawable-nodpi/moroshka_launcher_foreground_art.png",
+      "path": "android/app/src/main/res/drawable-nodpi/moroshka_launcher_foreground_art.png"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/drawable-v26/moroshka_launcher_foreground.xml",
+      "path": "android/app/src/main/res/drawable-v26/moroshka_launcher_foreground.xml"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/drawable/moroshka_launcher_background.xml",
+      "path": "android/app/src/main/res/drawable/moroshka_launcher_background.xml"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/drawable/moroshka_launcher_monochrome.xml",
+      "path": "android/app/src/main/res/drawable/moroshka_launcher_monochrome.xml"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/mipmap-anydpi-v26/moroshka_launcher.xml",
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/moroshka_launcher.xml"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/mipmap-anydpi-v33/moroshka_launcher.xml",
+      "path": "android/app/src/main/res/mipmap-anydpi-v33/moroshka_launcher.xml"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/mipmap-hdpi/moroshka_launcher.png",
+      "path": "android/app/src/main/res/mipmap-hdpi/moroshka_launcher.png"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/mipmap-mdpi/moroshka_launcher.png",
+      "path": "android/app/src/main/res/mipmap-mdpi/moroshka_launcher.png"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/mipmap-xhdpi/moroshka_launcher.png",
+      "path": "android/app/src/main/res/mipmap-xhdpi/moroshka_launcher.png"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/mipmap-xxhdpi/moroshka_launcher.png",
+      "path": "android/app/src/main/res/mipmap-xxhdpi/moroshka_launcher.png"
+    },
+    {
+      "source": "docs/design/assets/platform/android/res/mipmap-xxxhdpi/moroshka_launcher.png",
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/moroshka_launcher.png"
+    },
+    {
+      "source": "docs/design/assets/fonts/Manrope-Variable.ttf",
+      "path": "android/app/src/main/res/font/manrope.ttf"
+    },
+    {
+      "source": "docs/design/assets/fonts/OFL.txt",
+      "path": "android/app/src/main/assets/licenses/manrope-OFL.txt"
+    }
+  ]
+}

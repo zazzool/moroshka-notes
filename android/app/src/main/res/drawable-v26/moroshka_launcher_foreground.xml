@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 15.75% per edge is 17.01dp on the 108dp design canvas; nominal art box 74dp. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="15.75%"
+    android:insetTop="15.75%"
+    android:insetRight="15.75%"
+    android:insetBottom="15.75%">
+    <bitmap android:src="@drawable/moroshka_launcher_foreground_art"
+        android:gravity="fill" android:filter="true" android:antialias="true" />
+</inset>
