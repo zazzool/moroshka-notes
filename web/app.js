@@ -1,5 +1,6 @@
 import { encodeArchive, decodeArchive, planRestore, maxArchiveBytes } from '/backup.mjs'
 import { pullSnapshot } from '/sync-pull.mjs'
+import { applyProposal, appendLink, categoryLabels } from '/knowledge.mjs'
 
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
@@ -427,6 +428,140 @@ function downloadArchive(bytes) {
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+let knowledgeGeneration=0
+function knowledgeDialog(titleText){
+  if(busy)return null
+  if(!token){alertText('Подключите сервер','Интеллектуальные функции работают через ваш сервер.');return null}
+  try{persistEditor()}catch(e){report(e);return null}
+  const gen=++knowledgeGeneration, dialog=$('knowledge-dialog')
+  $('knowledge-title').textContent=titleText
+  $('knowledge-status').textContent='Загрузка…'
+  $('knowledge-body').replaceChildren()
+  dialog.showModal()
+  return {active:()=>dialog.open&&knowledgeGeneration===gen,status:text=>$('knowledge-status').textContent=text,
+    body:$('knowledge-body'),close:()=>dialog.close()}
+}
+function knowledgeButton(text,callback){
+  const b=el('button',text)
+  b.type='button'
+  b.onclick=async()=>{
+    b.disabled=true
+    try{await callback()}catch(e){if($('knowledge-dialog').open)$('knowledge-status').textContent=e.message}
+    finally{b.disabled=false}
+  }
+  return b
+}
+function checkedOption(body,text){
+  const label=el('label','','knowledge-choice'), box=el('input','')
+  box.type='checkbox'
+  label.append(box,el('span',text))
+  body.append(label)
+  return box
+}
+function currentPinned(source){
+  persistEditor()
+  const n=notes.get(source.id)
+  if(selected!==source.id||!n||n.text!==source.text||n.base!==source.base||n.dirty)
+    throw Error('Заметка изменилась. Повторите анализ после синхронизации.')
+  return n
+}
+function pinnedSelection(){
+  try{persistEditor()}catch(e){report(e);return null}
+  const n=notes.get(selected)
+  if(!n||!token||n.dirty||!n.base){
+    alertText('Сначала синхронизируйте заметку','Предложения привязаны к сохранённой на сервере редакции.')
+    return null
+  }
+  return {...n}
+}
+async function analyzeNote(){
+  if(busy)return
+  const source=pinnedSelection(); if(!source)return
+  if(!confirm('Передать OpenRouter до 12 000 символов этой заметки для создания предложений? Запрос может быть платным.'))return
+  const d=knowledgeDialog('Предложения ИИ'); if(!d)return
+  try{
+    const result=await api('/api/ai/analyze','POST',{id:source.id,revision:source.base,consent:true})
+    if(!d.active())return
+    if(result.id!==source.id||result.revision!==source.base)throw Error('Получена другая редакция')
+    currentPinned(source)
+    // Validate all candidates before showing any action that can persist them.
+    applyProposal(source.text,{title:result.title,tags:result.tags,category:result.category})
+    d.status(result.truncated?'Проанализированы первые 12 000 символов. Выберите изменения.':'Выберите изменения. Исходный текст не переписывается.')
+    const heading=checkedOption(d.body,'Заголовок: '+result.title)
+    const category=checkedOption(d.body,'Тип: '+categoryLabels[result.category])
+    const tagOptions=result.tags.map(t=>({tag:t,box:checkedOption(d.body,'#'+t)}))
+    function accept(all){
+      currentPinned(source)
+      const text=applyProposal(source.text,{title:all||heading.checked?result.title:null,
+        category:all||category.checked?result.category:null,tags:tagOptions.filter(t=>all||t.box.checked).map(t=>t.tag)})
+      if(text!==source.text){
+        put({...notes.get(source.id),text,dirty:true})
+        $('body').value=text; $('saved').textContent='Сохранено на устройстве'; render()
+      }
+      d.close()
+    }
+    d.body.append(knowledgeButton('Принять выбранное',()=>accept(false)),knowledgeButton('Принять все',()=>accept(true)))
+  }catch(e){if(d.active())d.status(e.message)}
+}
+async function semanticDialog(){
+  const d=knowledgeDialog('Смысловой поиск');if(!d)return
+  async function refresh(){
+    const status=await api('/api/ai/status')
+    if(!d.active())return
+    d.status(status.enabled?'Актуальный индекс: '+status.indexed+' из '+status.total:
+      'На сервере не настроена модель эмбеддингов.')
+    d.body.replaceChildren()
+    if(!status.enabled)return
+    if(status.pending.length){
+      d.body.append(knowledgeButton('Индексировать следующие '+status.pending.length+' заметок',async()=>{
+        if(!confirm('Передать OpenRouter первые 12 000 символов каждой из '+status.pending.length+' заметок для эмбеддингов? Возможна оплата.'))return
+        await api('/api/ai/index','POST',{notes:status.pending,consent:true})
+        if(d.active())await refresh()
+      }))
+    }
+    const input=el('input','');input.placeholder='Поиск по смыслу';input.setAttribute('aria-label','Смысловой запрос');input.maxLength=1000
+    const results=el('div','','knowledge-results')
+    d.body.append(input,knowledgeButton('Найти',async()=>{
+      const q=input.value.trim();if(!q)throw Error('Введите запрос')
+      if(!confirm('Передать поисковый запрос OpenRouter для вычисления эмбеддинга?'))return
+      const response=await api('/api/ai/search','POST',{query:q,consent:true})
+      if(!d.active())return
+      results.replaceChildren()
+      if(!response.notes.length)results.append(el('p','Совпадений среди актуальных индексированных заметок нет.'))
+      for(const item of response.notes)results.append(knowledgeButton(item.title,()=>{
+        const n=notes.get(item.id)
+        if(!n||n.dirty||n.base!==item.revision)throw Error('Сначала синхронизируйте актуальную заметку.')
+        d.close();select(n.id)
+      }))
+    }),results,knowledgeButton('Удалить векторный индекс',async()=>{
+      if(!confirm('Удалить векторный индекс сервера? Сами заметки останутся.'))return
+      await api('/api/ai/index','DELETE')
+      if(d.active())await refresh()
+    }))
+  }
+  try{await refresh()}catch(e){if(d.active())d.status(e.message)}
+}
+async function suggestLinks(){
+  if(busy)return
+  const source=pinnedSelection();if(!source)return
+  const d=knowledgeDialog('Смысловые связи');if(!d)return
+  try{
+    const result=await api('/api/ai/related','POST',{id:source.id,revision:source.base})
+    if(!d.active())return
+    d.status(result.notes.length?'Похожие индексированные заметки. Это предложения, а не установленные связи.':'Похожих индексированных заметок пока нет.')
+    for(const item of result.notes){
+      d.body.append(knowledgeButton('Связать: '+item.title,()=>{
+        currentPinned(source)
+        const target=notes.get(item.id)
+        if(!target||target.dirty||target.base!==item.revision||title(target)!==item.title)throw Error('Сначала синхронизируйте целевую заметку.')
+        const text=appendLink(source.text,item.title,[...notes.values()].map(title),links(source.text))
+        if(text!==source.text){put({...source,text,dirty:true});$('body').value=text;$('saved').textContent='Сохранено на устройстве';render()}
+        d.close()
+      }))
+    }
+  }catch(e){if(d.active())d.status(e.message)}
+}
+
 function start() {
   for (const k of Object.keys(localStorage).filter(k => k.startsWith(prefix))) {
     const n = JSON.parse(localStorage.getItem(k)); notes.set(n.id,n)
@@ -513,6 +648,10 @@ function start() {
     const a = document.createElement('a'); const url = URL.createObjectURL(new Blob([$('body').value],{type:'text/markdown'}))
     a.href = url; a.download = title(notes.get(selected)).replace(/[^\p{L}\p{N} _-]/gu,'_').slice(0,100)+'.md'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000)
   }
+  $('ai-analyze').onclick = analyzeNote
+  $('ai-search').onclick = semanticDialog
+  $('ai-links').onclick = suggestLinks
+  $('knowledge-dialog').addEventListener('close',()=>{knowledgeGeneration++;$('knowledge-body').replaceChildren()})
   $('history').onclick = () => openServerArchive('history',selected)
   $('trash').onclick = () => openServerArchive('trash')
   $('delete-note').onclick = deleteSyncedNote

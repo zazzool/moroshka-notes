@@ -101,3 +101,11 @@ details{margin:18px 0}summary{cursor:pointer;min-height:48px;padding:12px 0}deta
 .auto-sync-control{display:flex;align-items:center;gap:8px;min-height:48px;font-size:13px;color:var(--ink);cursor:pointer}
 .auto-sync-control input{width:22px;height:22px;flex:none;accent-color:var(--accent)}
 @media(max-width:680px){.auto-sync-control{flex-basis:100%}}
+
+#knowledge-dialog{width:min(600px,94vw);max-height:90dvh;overflow:auto}
+#knowledge-status{color:var(--muted);font-size:13px;white-space:pre-wrap}
+#knowledge-body,.knowledge-results{display:grid;gap:8px}
+#knowledge-body button{text-align:left;overflow-wrap:anywhere}
+.knowledge-choice{display:flex;gap:10px;align-items:center;min-height:48px}
+.knowledge-choice input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--accent)}
+#knowledge-dialog .row{margin-top:12px}

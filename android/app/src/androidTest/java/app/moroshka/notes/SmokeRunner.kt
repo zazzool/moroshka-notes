@@ -281,6 +281,20 @@ class SmokeRunner : Instrumentation() {
         return "Incremental-sync-ok"
     }
 
+    private fun knowledgeFixture(): String {
+        val text="# Original\n\nИсходник #manual"
+        val changed=KnowledgeApi.metadata(text,"Новое",listOf("manual","tag"),"idea")
+        check(changed.startsWith("# Новое\n\nИсходник #manual"))
+        check("tag" in MarkdownMetadata.tags(changed) && "type-idea" in MarkdownMetadata.tags(changed))
+        check(KnowledgeApi.metadata(text,null,emptyList(),null)==text)
+        val code="~~~\n# original"
+        check(KnowledgeApi.metadata(code,null,listOf("tag"),null)=="#tag\n\n"+code)
+        check(runCatching{KnowledgeApi.metadata(text,"bad\nheading",emptyList(),null)}.isFailure)
+        check(runCatching{KnowledgeApi.link(text,"Same",listOf("same","Same"),emptyList())}.isFailure)
+        check(KnowledgeApi.link(text,"Target",listOf("Target"),emptyList())=="[[Target]]\n\n"+text)
+        return "Knowledge-metadata-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
@@ -289,6 +303,7 @@ class SmokeRunner : Instrumentation() {
             if (args.containsKey("historyFixture")) return@runCatching historyFixture()
             if (args.containsKey("syncGateFixture")) return@runCatching syncGateFixture()
             if (args.containsKey("incrementalFixture")) return@runCatching incrementalFixture()
+            if (args.containsKey("knowledgeFixture")) return@runCatching knowledgeFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)

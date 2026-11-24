@@ -223,6 +223,73 @@ def incremental_check(origin, browser):
     ctx.close()
 
 
+def knowledge_check(origin, browser):
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    page.goto(origin)
+    connect(page)
+    page.locator("#new").click()
+    text="# Проверка ИИ\n\nИсходный текст #ручной"
+    page.get_by_label("Markdown").fill(text)
+    page.locator("#sync").click()
+    expect(page.locator("#saved")).to_have_text("Синхронизировано")
+    page.route("**/api/ai/analyze",lambda route: route.fulfill(
+        json={**route.request.post_data_json,"title":"Новый заголовок","category":"idea","tags":["авто"],"truncated":False}))
+    page.once("dialog",lambda d:d.accept())
+    page.locator("#ai-analyze").click()
+    expect(page.get_by_text("Заголовок: Новый заголовок")).to_be_visible()
+    page.get_by_text("#авто",exact=True).click()
+    page.get_by_role("button",name="Принять выбранное").click()
+    expect(page.get_by_label("Markdown")).to_have_value(text+"\n\n#авто\n")
+    page.locator("#ai-analyze").click()
+    expect(page.locator("#msgTitle")).to_have_text("Сначала синхронизируйте заметку")
+    page.get_by_role("button",name="Закрыть",exact=True).click()
+    page.locator("#ai-search").click()
+    expect(page.locator("#knowledge-status")).to_have_text("На сервере не настроена модель эмбеддингов.")
+    page.locator("#knowledge-dialog").get_by_role("button",name="Закрыть",exact=True).click()
+    # Exercise the semantic UI with deterministic HTTP fixtures. The server
+    # integration tests separately verify actual index and provider handling.
+    page.locator("#sync").click()
+    expect(page.locator("#saved")).to_have_text("Синхронизировано")
+    manifest=ctx.request.get(origin+"/api/sync/manifest",headers={"Authorization":"Bearer "+KEY}).json()
+    source=next(n for n in manifest["notes"] if n["revision"]==__import__("hashlib").sha256((text+"\n\n#авто\n").encode()).hexdigest())
+    target_text="# Семантическая цель\n\nПохожая заметка"
+    target_id=str(__import__("uuid").uuid4())
+    target=ctx.request.put(origin+"/api/notes/"+target_id,headers={"Authorization":"Bearer "+KEY},
+                           data={"text":target_text,"base":None}).json()
+    page.locator("#sync").click()
+    expect(page.locator("#status")).to_have_text("Синхронизировано")
+    indexed=[]
+    def status_reply(route):
+        route.fulfill(json={"enabled":True,"indexed":len(indexed),"total":1,
+                            "pending":[] if indexed else [{"id":target_id,"revision":target["revision"]}]})
+    def index_reply(route):
+        assert route.request.post_data_json["consent"] is True
+        indexed.append(True)
+        route.fulfill(json={"indexed":1})
+    row={"id":target_id,"title":"Семантическая цель","revision":target["revision"],"similarity":0.8}
+    page.route("**/api/ai/status",status_reply)
+    page.route("**/api/ai/index",index_reply)
+    page.route("**/api/ai/search",lambda route:route.fulfill(json={"notes":[row]}))
+    page.route("**/api/ai/related",lambda route:route.fulfill(json={"notes":[row]}))
+    page.locator("#ai-search").click()
+    expect(page.locator("#knowledge-status")).to_have_text("Актуальный индекс: 0 из 1")
+    page.once("dialog",lambda d:d.accept())
+    page.get_by_role("button",name="Индексировать следующие 1 заметок").click()
+    expect(page.locator("#knowledge-status")).to_have_text("Актуальный индекс: 1 из 1")
+    page.get_by_label("Смысловой запрос").fill("пример")
+    page.once("dialog",lambda d:d.accept())
+    page.locator("#knowledge-dialog").get_by_role("button",name="Найти",exact=True).click()
+    page.locator("#knowledge-dialog").get_by_role("button",name="Семантическая цель",exact=True).click()
+    expect(page.get_by_label("Markdown")).to_have_value(target_text)
+    page.get_by_role("button",name="Закрыть редактор").click()
+    page.locator("#items .note").filter(has_text="Проверка ИИ").click()
+    page.locator("#ai-links").click()
+    page.locator("#knowledge-dialog").get_by_role("button",name="Связать: Семантическая цель").click()
+    expect(page.get_by_label("Markdown")).to_have_value("[[Семантическая цель]]\n\n"+text+"\n\n#авто\n")
+    ctx.close()
+
+
 def check(origin):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
@@ -307,6 +374,7 @@ def check(origin):
         history_check(origin, browser)
         auto_sync_check(origin, browser)
         incremental_check(origin, browser)
+        knowledge_check(origin, browser)
         browser.close()
 
 
