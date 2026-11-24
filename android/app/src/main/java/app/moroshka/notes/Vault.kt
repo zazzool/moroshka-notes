@@ -158,7 +158,12 @@ class Vault(context: Context) {
                 return response
             } finally { trackConnection(null); conn.disconnect() }
         }
-        val snapshot = api("/api/notes")
+        val known = local {
+            val ids = all().map { it.id } + trash.listFiles().orEmpty()
+                .filter { it.name.endsWith(".md") }.map { it.name.removeSuffix(".md") }
+            ids.distinct().mapNotNull { id -> bases.getString(id, null)?.let { id to it } }.toMap()
+        }
+        val snapshot = SyncPull.snapshot(::api, known, ::checkpoint)
         val list = snapshot.getJSONArray("notes")
         val remote = (0 until list.length()).map { list.getJSONObject(it) }.associateBy { it.getString("id") }.toMutableMap()
         var conflicts = 0
