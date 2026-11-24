@@ -1,5 +1,9 @@
 name: Deploy to my server
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [deploy/alpha-release-request.json]
 permissions:
   contents: read
 concurrency:
