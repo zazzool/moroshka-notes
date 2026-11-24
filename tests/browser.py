@@ -223,6 +223,33 @@ def incremental_check(origin, browser):
     ctx.close()
 
 
+def knowledge_check(origin, browser):
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    page.goto(origin)
+    connect(page)
+    page.locator("#new").click()
+    text="# Проверка ИИ\n\nИсходный текст #ручной"
+    page.get_by_label("Markdown").fill(text)
+    page.locator("#sync").click()
+    expect(page.locator("#saved")).to_have_text("Синхронизировано")
+    page.route("**/api/ai/analyze",lambda route: route.fulfill(
+        json={**route.request.post_data_json,"title":"Новый заголовок","category":"idea","tags":["авто"],"truncated":False}))
+    page.once("dialog",lambda d:d.accept())
+    page.locator("#ai-analyze").click()
+    expect(page.get_by_text("Заголовок: Новый заголовок")).to_be_visible()
+    page.get_by_text("#авто",exact=True).click()
+    page.get_by_role("button",name="Принять выбранное").click()
+    expect(page.get_by_label("Markdown")).to_have_value(text+"\n\n#авто\n")
+    page.locator("#ai-analyze").click()
+    expect(page.locator("#msgTitle")).to_have_text("Сначала синхронизируйте заметку")
+    page.get_by_role("button",name="Закрыть",exact=True).click()
+    page.locator("#ai-search").click()
+    expect(page.locator("#knowledge-status")).to_have_text("На сервере не настроена модель эмбеддингов.")
+    page.locator("#knowledge-dialog").get_by_role("button",name="Закрыть",exact=True).click()
+    ctx.close()
+
+
 def check(origin):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
@@ -307,6 +334,7 @@ def check(origin):
         history_check(origin, browser)
         auto_sync_check(origin, browser)
         incremental_check(origin, browser)
+        knowledge_check(origin, browser)
         browser.close()
 
 

@@ -17,7 +17,7 @@ export function applyProposal(text,{title=null,tags=[],category=null}={}){
     }
     if(fence)return line
     if(/^#[ \t]+[^\r\n]+/.test(line)){
-      if(!found){found=true;return title===null?line:line.replace(/^#[ \t]+[^\r\n]+/,'# '+title.trim())}
+      if(!found){found=true;return title===null?line:line.replace(/^#[ \t]+[^\r\n]+/,()=> '# '+title.trim())}
       return line
     }
     for(const m of line.matchAll(/(?<!\S)#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,39})(?![\p{L}\p{N}_-])/gu))

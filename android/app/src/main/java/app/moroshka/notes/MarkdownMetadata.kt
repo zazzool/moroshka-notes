@@ -10,13 +10,10 @@ object MarkdownMetadata {
         var fence: String? = null
         return text.split("\n").joinToString("\n") { line ->
             val trimmed = line.trimStart()
-            val marker = when {
-                trimmed.startsWith("```") -> "```"
-                trimmed.startsWith("~~~") -> "~~~"
-                else -> null
-            }
+            val marker = Regex("^(?:\u0060{3,}|~{3,})").find(trimmed)?.value
             if (marker != null) {
-                if (fence == null) fence = marker else if (fence == marker) fence = null
+                val open = fence
+                if (open == null) fence = marker else if (open.first() == marker.first() && marker.length >= open.length) fence = null
                 line
             } else if (fence != null || (!includeHeadings && trimmed.startsWith("# "))) line else action(line)
         }

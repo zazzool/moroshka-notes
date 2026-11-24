@@ -3,6 +3,7 @@ const modern='2026-07-28'
 const legacy=['2025-11-25','2025-06-18','2025-03-26']
 const supported=[modern,...legacy]
 const identity={name:'Moroshka Notes',version:'0.1.0'}
+function decodedName(value){return typeof value==='string'&&value.startsWith('=?base64?')&&value.endsWith('?=')?Buffer.from(value.slice(9,-2),'base64').toString('utf8'):value}
 const schema=(key,type)=>({type:'object',additionalProperties:false,required:[key],properties:{[key]:type}})
 const annotations={readOnlyHint:true,destructiveHint:false,openWorldHint:false,idempotentHint:true}
 const tools=[
@@ -21,9 +22,9 @@ export function mcpResponse(body,headers,vault){
   if(!params||typeof params!=='object'||Array.isArray(params))return error(-32602,'Invalid params',400)
   const version=params._meta?.['io.modelcontextprotocol/protocolVersion']
   const header=headers['mcp-protocol-version']
-  if(version!==undefined||header===modern){
+  if(version!==undefined||header===modern||headers['mcp-method']){
     if(header!==version||headers['mcp-method']!==body.method||
-      (body.method==='tools/call'&&headers['mcp-name']!==params.name))
+      (body.method==='tools/call'&&decodedName(headers['mcp-name'])!==params.name))
       return error(-32020,'Header mismatch',400)
     if(version!==modern)return error(-32022,'Unsupported protocol version',400,{supported,requested:version})
     if(body.method==='server/discover')return result({resultType:'complete',supportedVersions:supported,
