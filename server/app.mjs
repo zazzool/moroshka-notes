@@ -3,6 +3,8 @@ import { timingSafeEqual, createHash, randomBytes, randomInt } from 'node:crypto
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
+import { intelligence } from './intelligence.mjs'
+import { mcpResponse } from './mcp.mjs'
 
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']], ['/app.js', ['app.js', 'text/javascript']],
@@ -45,10 +47,12 @@ async function payload(req) {
   throw new ApiError(400, 'Ожидается JSON')
 }
 export function application(options, request = fetch) {
-  const { token, actionsToken, dir, openrouterKey, model, publicUrl } = options
+  const { token, actionsToken, mcpToken, dir, openrouterKey, model, embeddingModel, publicUrl } = options
   if (!token || token.length < 24) throw Error('Задайте MOROSHKA_TOKEN длиной от 24 символов')
   if (actionsToken && (actionsToken.length < 24 || token === actionsToken)) throw Error('Нужен отдельный ключ для ChatGPT Actions длиной от 24 символов')
+  if (mcpToken && (mcpToken.length < 24 || mcpToken === token || mcpToken === actionsToken)) throw Error('Нужен отдельный MCP_TOKEN длиной от 24 символов')
   const vault = openVault(dir)
+  const ai = intelligence({vault,dir,key:openrouterKey,model,embeddingModel,request})
   // Pairing requests are short-lived and live only in this process.
   const pairing = new Map()
   function cleanPairing() {
@@ -124,6 +128,16 @@ export function application(options, request = fetch) {
         }
         throw new ApiError(404, 'Не найдено')
       }
+      if (pathname === '/mcp') {
+        if (!mcpToken) throw new ApiError(404,'MCP не настроен')
+        if (!sameOrigin(req)) throw new ApiError(403,'Origin отклонён')
+        requireKey(req,mcpToken)
+        if (req.method !== 'POST') {res.setHeader('Allow','POST');res.writeHead(405);return res.end()}
+        if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type']||''))throw new ApiError(415,'Ожидается JSON')
+        const message=mcpResponse(await payload(req),req.headers,vault)
+        if(message.body===null){res.writeHead(message.status);return res.end()}
+        return json(res,message.status,message.body)
+      }
       if (pathname.startsWith('/actions/')) {
         requireKey(req, actionsToken)
         if (get && pathname === '/actions/search') {
@@ -162,6 +176,12 @@ export function application(options, request = fetch) {
           const { base } = await payload(req)
           return json(res, 200, vault.remove(pathname.slice('/api/notes/'.length), base))
         }
+        if (get && pathname === '/api/ai/status') return json(res,200,ai.status())
+        if (req.method === 'POST' && pathname === '/api/ai/analyze') return json(res,200,await ai.analyze(await payload(req)))
+        if (req.method === 'POST' && pathname === '/api/ai/index') return json(res,200,await ai.index(await payload(req)))
+        if (req.method === 'POST' && pathname === '/api/ai/search') return json(res,200,await ai.search(await payload(req)))
+        if (req.method === 'POST' && pathname === '/api/ai/related') return json(res,200,ai.related(await payload(req)))
+        if (req.method === 'DELETE' && pathname === '/api/ai/index') return json(res,200,ai.clear())
         if (req.method === 'POST' && pathname === '/api/summary') {
           if (!openrouterKey || !model) throw new ApiError(503, 'Владелец сервера ещё не подключил OpenRouter')
           const { id, revision } = await payload(req)
@@ -190,7 +210,7 @@ export function application(options, request = fetch) {
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const e = process.env
-  application({ token: e.MOROSHKA_TOKEN, actionsToken: e.ACTIONS_TOKEN, publicUrl: e.PUBLIC_URL,
+  application({ token: e.MOROSHKA_TOKEN, actionsToken: e.ACTIONS_TOKEN, mcpToken:e.MCP_TOKEN, embeddingModel:e.OPENROUTER_EMBEDDING_MODEL, publicUrl: e.PUBLIC_URL,
     dir: e.VAULT_DIR || 'vault', openrouterKey: e.OPENROUTER_API_KEY, model: e.OPENROUTER_MODEL
   }).listen(Number(e.PORT || 8090), e.HOST || '127.0.0.1', () => console.log('Moroshka Notes запущен'))
 }
