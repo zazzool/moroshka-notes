@@ -389,6 +389,8 @@ class MainActivity : Activity() {
 
     private fun searchContent(content: LinearLayout) {
         section(content, "Поиск")
+        content.addView(button("Смысловой поиск") { showSemanticSearch() }.apply { icon(R.drawable.icon_sparkles) },
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
         val field = EditText(this).apply {
             hint = "Найти мысль или тему"
             contentDescription = "Поиск по заметкам"
@@ -667,7 +669,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         bar.addView(button("") {
             flush()
-            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом", "История на устройстве")) { _, index ->
+            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом", "История на устройстве", "Предложения ИИ", "Смысловые связи")) { _, index ->
                 safely {
                     when (index) {
                         0 -> renameTitle()
@@ -682,6 +684,8 @@ class MainActivity : Activity() {
                         5 -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
                             .putExtra(Intent.EXTRA_TEXT, editor?.text.toString()), "Поделиться заметкой"))
                         6 -> showVersions(note.id)
+                        7 -> showAiSuggestions()
+                        8 -> showSemanticLinks()
                     }
                 }
             }.show()
@@ -713,6 +717,133 @@ class MainActivity : Activity() {
         tools.addView(button("Голос") { voiceInput() }.apply { icon(R.drawable.icon_mic) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         changes(field) { dirty = true; handler.removeCallbacks(autoSave); handler.postDelayed(autoSave, 350) }
     }
+    private fun knowledgeRequest(path: String, data: org.json.JSONObject? = null,
+                                 method: String = if (data == null) "GET" else "POST",
+                                 result: (org.json.JSONObject) -> Unit) {
+        if (syncing) return
+        val connection = BackgroundSync.credentials(this) ?: return notice("Сначала подключите сервер.")
+        val progress = AlertDialog.Builder(this).setTitle("Морошка · ИИ")
+            .setMessage("Выполняется запрос…").setCancelable(false).create()
+        progress.show()
+        syncing = true
+        worker.execute {
+            val response = runCatching { KnowledgeApi(connection.first, connection.second).request(path,data,method) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                syncing = false
+                progress.dismiss()
+                response.onSuccess { safely { result(it) } }
+                    .onFailure { notice(it.message ?: "Не удалось выполнить запрос") }
+                val shared = pendingShare
+                if (shared != null) { pendingShare = null; safely { flush(); edit(vault.create(shared)) } }
+                releaseBackground()
+            }
+        }
+    }
+    private fun knowledgeSource(): Note? {
+        flush()
+        val id = current ?: return null
+        return vault.read(id)
+    }
+    private fun knowledgeUnchanged(note: Note) {
+        flush()
+        check(current == note.id && vault.read(note.id).text == note.text) { "Заметка изменилась. Повторите запрос." }
+    }
+    private fun showAiSuggestions() {
+        val note = knowledgeSource() ?: return
+        val revision = KnowledgeApi.revision(note.text)
+        AlertDialog.Builder(this).setTitle("Предложения ИИ")
+            .setMessage("Передать OpenRouter до 12 000 символов этой заметки? Запрос может быть платным. Сначала синхронизируйте её.")
+            .setNegativeButton("Отмена",null).setPositiveButton("Анализировать") { _,_ -> safely {
+                knowledgeRequest("/api/ai/analyze",org.json.JSONObject().put("id",note.id).put("revision",revision).put("consent",true)) { reply ->
+                    knowledgeUnchanged(note)
+                    check(reply.getString("id")==note.id && reply.getString("revision")==revision)
+                    val heading=reply.getString("title")
+                    val category=reply.getString("category")
+                    val array=reply.getJSONArray("tags")
+                    val tags=(0 until array.length()).map { array.getString(it) }
+                    KnowledgeApi.metadata(note.text,heading,tags,category)
+                    val choices=listOf("Заголовок: "+heading,"Тип: "+KnowledgeApi.labels.getValue(category))+tags.map { "#"+it }
+                    val selected=BooleanArray(choices.size)
+                    fun accept(all:Boolean) {
+                        knowledgeUnchanged(note)
+                        val updated=KnowledgeApi.metadata(note.text,if(all||selected[0])heading else null,
+                            tags.filterIndexed { i,_ -> all||selected[i+2] },if(all||selected[1])category else null)
+                        editor?.setText(updated)
+                        flush()
+                    }
+                    AlertDialog.Builder(this).setTitle(if(reply.optBoolean("truncated")) "Предложения ИИ · первые 12 000 символов" else "Предложения ИИ")
+                        .setMultiChoiceItems(choices.toTypedArray(),selected) { _,i,value -> selected[i]=value }
+                        .setNegativeButton("Отклонить",null)
+                        .setNeutralButton("Принять все"){_,_->safely{accept(true)}}
+                        .setPositiveButton("Принять выбранное"){_,_->safely{accept(false)}}.show()
+                }
+            }}.show()
+    }
+    private fun showSemanticSearch() {
+        knowledgeRequest("/api/ai/status") { status ->
+            if (!status.optBoolean("enabled")) return@knowledgeRequest notice("На сервере не настроена модель эмбеддингов.")
+            val pending=status.getJSONArray("pending")
+            val actions=mutableListOf("Смысловой поиск","Удалить векторный индекс")
+            if(pending.length()>0)actions.add(0,"Индексировать следующие "+pending.length()+" заметок")
+            AlertDialog.Builder(this).setTitle("Индекс: "+status.getInt("indexed")+" из "+status.getInt("total"))
+                .setItems(actions.toTypedArray()){_,i->safely{
+                    when {
+                        actions[i].startsWith("Индексировать") -> AlertDialog.Builder(this)
+                            .setMessage("Передать OpenRouter до 12 000 символов каждой выбранной заметки? Возможна оплата.")
+                            .setNegativeButton("Отмена",null).setPositiveButton("Индексировать"){_,_->
+                                knowledgeRequest("/api/ai/index",org.json.JSONObject().put("notes",pending).put("consent",true)){ showSemanticSearch() }
+                            }.show()
+                        actions[i]=="Удалить векторный индекс" -> AlertDialog.Builder(this).setMessage("Удалить индекс сервера? Сами заметки останутся.")
+                            .setNegativeButton("Отмена",null).setPositiveButton("Удалить"){_,_->
+                                knowledgeRequest("/api/ai/index",null,"DELETE"){ notice("Индекс удалён.") }
+                            }.show()
+                        else -> {
+                            val input=EditText(this).apply{hint="Поиск по смыслу";setSingleLine();filters=arrayOf(android.text.InputFilter.LengthFilter(1000))}
+                            AlertDialog.Builder(this).setTitle("Смысловой запрос").setView(input)
+                                .setMessage("Запрос будет передан OpenRouter для расчёта эмбеддинга.")
+                                .setNegativeButton("Отмена",null).setPositiveButton("Найти"){_,_->safely{
+                                    val query=input.text.toString().trim()
+                                    require(query.isNotEmpty()){"Введите запрос"}
+                                    knowledgeRequest("/api/ai/search",org.json.JSONObject().put("query",query).put("consent",true)){ reply ->
+                                        showKnowledgeResults(reply,null)
+                                    }
+                                }}.show()
+                        }
+                    }
+                }}.setNegativeButton("Закрыть",null).show()
+        }
+    }
+    private fun showSemanticLinks() {
+        val note=knowledgeSource() ?: return
+        knowledgeRequest("/api/ai/related",org.json.JSONObject().put("id",note.id)
+            .put("revision",KnowledgeApi.revision(note.text))){ reply -> showKnowledgeResults(reply,note) }
+    }
+    private fun showKnowledgeResults(reply: org.json.JSONObject,source:Note?) {
+        val array=reply.getJSONArray("notes")
+        if(array.length()==0)return notice("Похожих индексированных заметок пока нет.")
+        val results=(0 until array.length()).map{array.getJSONObject(it)}
+        val titles=results.map{it.getString("title")}
+        AlertDialog.Builder(this).setTitle(if(source==null)"Результаты поиска" else "Предложения смысловых связей")
+            .setItems(titles.toTypedArray()){_,i->safely{
+                val row=results[i]
+                val target=vault.all().firstOrNull{it.id==row.getString("id")}
+                check(target!=null && KnowledgeApi.revision(target.text)==row.getString("revision")){"Сначала синхронизируйте целевую заметку."}
+                if(source==null)edit(target)
+                else {
+                    knowledgeUnchanged(source)
+                    AlertDialog.Builder(this).setMessage("Добавить вики-ссылку на «"+target.title+"»? Это предложение на основе сходства эмбеддингов.")
+                        .setNegativeButton("Отмена",null).setPositiveButton("Связать"){_,_->safely{
+                            knowledgeUnchanged(source)
+                            val actual=vault.read(target.id)
+                            check(actual.text==target.text){"Целевая заметка изменилась."}
+                            editor?.setText(KnowledgeApi.link(source.text,actual.title,vault.all().map{it.title},source.links))
+                            flush()
+                        }}.show()
+                }
+            }}.setNegativeButton("Закрыть",null).show()
+    }
+
     private fun renameTitle() {
         val field = editor ?: return
         val input = EditText(this).apply {
