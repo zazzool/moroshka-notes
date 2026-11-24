@@ -1,4 +1,5 @@
 import { encodeArchive, decodeArchive, planRestore, maxArchiveBytes } from '/backup.mjs'
+import { pullSnapshot } from '/sync-pull.mjs'
 
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
@@ -245,7 +246,8 @@ async function sync(automatic = false) {
     persistEditor()
   }
   try {
-    const {notes:remote, deleted = []} = await api('/api/notes')
+    const knownBases = new Map([...notes.values()].map(n=>[n.id,n.base]))
+    const {notes:remote, deleted = []} = await pullSnapshot(api,knownBases,checkpoint)
     checkpoint()
     const deletedIds = new Set(deleted.map(n=>n.id))
     for (const item of deleted) {
@@ -268,8 +270,15 @@ async function sync(automatic = false) {
       checkpoint()
       const n = notes.get(id)
       const r = byId.get(id)
-      if (r && !n) { applySynced({id:r.id,text:r.text,base:r.revision,dirty:false}); continue }
+      if (r && !n) {
+        if (typeof r.text !== 'string') throw Error('Локальная библиотека изменилась. Повторите обмен.')
+        applySynced({id:r.id,text:r.text,base:r.revision,dirty:false}); continue
+      }
       if (!n) continue
+      if (r && typeof r.text !== 'string') {
+        if (n.base !== r.revision) throw Error('Локальная редакция изменилась. Повторите обмен.')
+        if (!n.dirty) continue
+      }
       if (r && r.text === n.text) {
         if (n.dirty || n.base !== r.revision) applySynced({id,text:n.text,base:r.revision,dirty:false})
         continue

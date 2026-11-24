@@ -7,6 +7,7 @@ import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']], ['/app.js', ['app.js', 'text/javascript']],
   ['/backup.mjs', ['backup.mjs', 'text/javascript']],
+  ['/sync-pull.mjs', ['sync-pull.mjs', 'text/javascript']],
   ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
   ['/assets/cloudberry.webp', ['assets/cloudberry.webp', 'image/webp']],
   ['/assets/hero-day.webp', ['assets/hero-day.webp', 'image/webp']],
@@ -138,6 +139,11 @@ export function application(options, request = fetch) {
       } else if (pathname.startsWith('/api/')) {
         requireKey(req, token)
         if (get && pathname === '/api/notes') return json(res, 200, { notes: vault.list(), deleted: vault.deleted() })
+        if (get && pathname === '/api/sync/manifest') return json(res, 200, vault.manifest())
+        if (req.method === 'POST' && pathname === '/api/sync/read') {
+          const {notes} = await payload(req)
+          return json(res, 200, {notes:vault.readBatch(notes)})
+        }
         if (get && pathname === '/api/trash') return json(res, 200, { notes: vault.trashList() })
         if (get && pathname.startsWith('/api/trash/')) {
           return json(res, 200, vault.trashRead(pathname.slice('/api/trash/'.length)))

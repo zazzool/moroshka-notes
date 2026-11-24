@@ -177,3 +177,43 @@ test('corrupted archived revision blocks a replacement and leaves live note unch
   assert.equal((await api(path,'PUT',{text:'# Third',base:a})).status,500)
   assert.equal(readFileSync(join(dir,id+'.md'),'utf8'),text)
 })
+
+
+test('incremental inventory contains revisions only; pinned reads are bounded and backward compatible', async t => {
+  const {api,actionsToken}=await fixture(t)
+  const first=randomUUID(), second=randomUUID(), erased=randomUUID()
+  const text='# Большая заметка\n'+'я'.repeat(16000), updated=text+'\nновая строка'
+  for (const [id,body] of [[first,text],[second,'# Другая'],[erased,'# Удалённая']])
+    assert.equal((await api('/api/notes/'+id,'PUT',{text:body,base:null})).status,200)
+  assert.equal((await api('/api/notes/'+erased,'DELETE',{base:digest('# Удалённая')})).status,200)
+  const legacy=await (await api('/api/notes')).text()
+  const inventory=await (await api('/api/sync/manifest')).text()
+  const manifest=JSON.parse(inventory)
+  assert.equal(manifest.version,1)
+  assert.equal(manifest.notes.length,2)
+  assert.deepEqual(manifest.deleted,[{id:erased,revision:digest('# Удалённая')}])
+  assert.ok(manifest.notes.every(n=>Object.keys(n).sort().join(',')==='id,revision'))
+  assert.ok(inventory.length < legacy.length/10)
+  assert.deepEqual(manifest.notes.find(n=>n.id===first),{id:first,revision:digest(text)})
+  const read=notes=>api('/api/sync/read','POST',{notes})
+  const response=await read([{id:first,revision:digest(text)}])
+  assert.equal(response.status,200)
+  assert.deepEqual(await response.json(),{notes:[{id:first,revision:digest(text),text}]})
+  assert.equal((await read(manifest.notes)).status,200)
+  assert.equal((await api('/api/sync/manifest','GET',undefined,actionsToken)).status,401)
+  assert.equal((await api('/api/sync/read','POST',{notes:manifest.notes},'wrong')).status,401)
+  for (const invalid of [null,[],[null],[{id:first,revision:'wrong'}],
+    [{id:'../escape',revision:digest(text)}],[{id:first,revision:digest(text)},{id:first,revision:digest(text)}],
+    Array.from({length:9},()=>({id:randomUUID(),revision:digest(text)}))])
+    assert.equal((await read(invalid)).status,400)
+  assert.equal((await api('/api/notes/'+first,'PUT',{text:updated,base:digest(text)})).status,200)
+  const stale=await read(manifest.notes)
+  assert.equal(stale.status,409)
+  assert.equal(Object.hasOwn(await stale.json(),'notes'),false)
+  assert.equal((await read([{id:erased,revision:digest('# Удалённая')}])).status,409)
+  const next=await (await api('/api/sync/manifest')).json()
+  assert.equal(next.notes.find(n=>n.id===first).revision,digest(updated))
+  assert.deepEqual((await (await read([{id:first,revision:digest(updated)}])).json()).notes,
+    [{id:first,revision:digest(updated),text:updated}])
+  assert.equal((await api('/api/notes')).status,200)
+})

@@ -1,5 +1,5 @@
-const cacheName = 'moroshka-shell-v6'
-const shell = ['/', '/app.js', '/backup.mjs', '/style.css', '/icon.png',
+const cacheName = 'moroshka-shell-v7'
+const shell = ['/', '/app.js', '/backup.mjs', '/sync-pull.mjs', '/style.css', '/icon.png',
   '/assets/cloudberry.webp', '/assets/hero-day.webp', '/assets/hero-night.webp', '/assets/ideas.webp', '/assets/knowledge.webp', '/assets/search.webp', '/assets/balance.webp', '/assets/manrope.ttf', '/assets/manrope-OFL.txt', '/assets/note.svg', '/assets/checkbox.svg', '/assets/search.svg', '/assets/link.svg', '/assets/sparkles.svg', '/assets/folder.svg'
 ]
 self.addEventListener('install', event => {

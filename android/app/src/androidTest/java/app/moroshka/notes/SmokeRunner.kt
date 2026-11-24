@@ -248,6 +248,39 @@ class SmokeRunner : Instrumentation() {
         return "Automatic-sync-gate-ok"
     }
 
+    private fun incrementalFixture(): String {
+        val text = "# Передаваемая редакция"
+        val revision = java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val first = java.util.UUID.randomUUID().toString()
+        val second = java.util.UUID.randomUUID().toString()
+        fun item(id: String) = org.json.JSONObject().put("id",id).put("revision",revision)
+        val manifest = org.json.JSONObject().put("version",1)
+            .put("notes",org.json.JSONArray(listOf(item(first),item(second))))
+            .put("deleted",org.json.JSONArray())
+        val calls = mutableListOf<String>()
+        val result = SyncPull.snapshot({ path, data, method ->
+            calls.add(path)
+            if (path == "/api/sync/manifest") manifest
+            else {
+                check(path == "/api/sync/read" && method == "POST")
+                val batch = requireNotNull(data).getJSONArray("notes")
+                check(batch.length() == 1 && batch.getJSONObject(0).getString("id") == second)
+                org.json.JSONObject().put("notes",org.json.JSONArray(listOf(item(second).put("text",text))))
+            }
+        },mapOf(first to revision),{})
+        check(calls == listOf("/api/sync/manifest","/api/sync/read"))
+        val rows = result.getJSONArray("notes")
+        check(!rows.getJSONObject(0).has("text") && rows.getJSONObject(1).getString("text") == text)
+        val fallback = SyncPull.snapshot({ path, _, _ ->
+            if (path == "/api/sync/manifest") throw SyncHttpError(404)
+            check(path == "/api/notes")
+            org.json.JSONObject().put("notes",org.json.JSONArray())
+        },emptyMap(),{})
+        check(fallback.getJSONArray("notes").length() == 0)
+        return "Incremental-sync-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
@@ -255,6 +288,7 @@ class SmokeRunner : Instrumentation() {
             if (args.containsKey("backupFixture")) return@runCatching backupFixture()
             if (args.containsKey("historyFixture")) return@runCatching historyFixture()
             if (args.containsKey("syncGateFixture")) return@runCatching syncGateFixture()
+            if (args.containsKey("incrementalFixture")) return@runCatching incrementalFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)
