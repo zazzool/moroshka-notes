@@ -6,6 +6,7 @@
 <button id="new" class="primary">＋ Новая заметка</button>
 <nav aria-label="Библиотека"><button class="nav-notes" data-view="notes" aria-current="page">Заметки</button><button class="nav-tasks" data-view="tasks">Задачи</button></nav>
 <details class="archive-menu"><summary>Резервные копии</summary><p>Все сохранённые заметки в одном JSON. Без ключей подключения; текст не зашифрован.</p><button id="backup-export">Сохранить архив</button><button id="backup-import">Восстановить из архива</button><input id="backup-file" type="file" accept=".json,application/json" hidden></details>
+<button id="ai-search" class="trash-action">Смысловой поиск</button>
 <button id="trash" class="trash-action">Корзина сервера</button>
 <div class="connection"><span id="status" role="status">На этом устройстве</span><button id="connect">Подключение</button><button id="sync">Синхронизировать</button><label class="auto-sync-control"><input type="checkbox" id="auto-sync"> Автосинхронизация</label></div></aside>
 <main><div class="top"><span>Моя библиотека</span><button id="import">Импорт .md</button><input id="file" type="file" accept=".md,text/markdown,text/plain" multiple hidden></div>
@@ -20,7 +21,7 @@
 <div id="items"></div></main>
 <section id="reader" hidden><div class="readerBar"><button id="close" aria-label="Закрыть редактор">← Библиотека</button><button id="export">Скачать .md</button></div>
 <label for="body">Markdown</label><textarea id="body" spellcheck="true" placeholder="# Название заметки"></textarea>
-<div class="editorActions"><span id="saved" role="status"></span><button id="history">История сервера</button><button id="delete-note">В корзину сервера</button><button id="summary" class="summary-button">Резюме в OpenRouter</button></div>
+<div class="editorActions"><span id="saved" role="status"></span><button id="history">История сервера</button><button id="delete-note">В корзину сервера</button><button id="ai-analyze" class="summary-button">Предложения ИИ</button><button id="ai-links">Смысловые связи</button><button id="summary" class="summary-button">Резюме в OpenRouter</button></div>
 <div id="related"></div></section></div>
 <dialog id="settings"><h2>Подключить устройство</h2>
 <p>На телефоне откройте «Подключить другое устройство» и введите этот код.</p>
@@ -38,5 +39,8 @@
 <div class="row"><button id="archive-history" hidden>История этой заметки</button><button id="archive-copy" class="primary" disabled>Сохранить копию</button></div>
 <form method="dialog"><div class="row"><button>Закрыть</button></div></form>
 </dialog>
+<dialog id="knowledge-dialog" aria-labelledby="knowledge-title"><h2 id="knowledge-title"></h2>
+<p id="knowledge-status" role="status"></p><div id="knowledge-body"></div>
+<form method="dialog"><div class="row"><button>Закрыть</button></div></form></dialog>
 <dialog id="message"><h2 id="msgTitle"></h2><p id="msgText"></p><form method="dialog"><button>Закрыть</button></form></dialog>
 </body></html>
