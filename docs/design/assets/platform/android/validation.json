@@ -1,0 +1,63 @@
+{
+  "status": "passed-static-handoff-checks",
+  "android_build_run": false,
+  "device_or_launcher_run": false,
+  "xml_files_parsed": 5,
+  "local_resource_references_resolved": 6,
+  "foreground_sha256": "58e250065fc96944364c50e4385b6cd0bbb3a8f16e450a5df14a97e3f06bcd80",
+  "foreground_original_unchanged": true,
+  "geometry": {
+    "design_canvas_dp": [
+      108,
+      108
+    ],
+    "safe_circle_diameter_dp": 66,
+    "inset_each_edge_percent": 15.75,
+    "ideal_art_square_dp": 73.98,
+    "conservative_checked_square_dp": 74.0,
+    "visible_alpha_threshold_inclusive": 2,
+    "max_visible_pixel_center_radius_dp": 32.36494728103682,
+    "max_visible_pixel_extent_radius_dp": 32.4066744754609,
+    "visible_bounds_px": [
+      142,
+      164,
+      1097,
+      1055
+    ],
+    "visible_width_height_dp": [
+      56.355661881977674,
+      52.578947368421055
+    ],
+    "max_any_nonzero_alpha_radius_dp": 49.37131244534854,
+    "alpha_1_pixels_outside_circle": 2420,
+    "all_nonzero_alpha_inside_circle": false,
+    "monochrome_strict_conservative_radius_dp": 32.363551258362044,
+    "monochrome_method": "cubic control-point hull and full arc-circle bounds plus half round stroke width"
+  },
+  "legacy_export_sizes": {
+    "mdpi": [
+      48,
+      48
+    ],
+    "hdpi": [
+      72,
+      72
+    ],
+    "xhdpi": [
+      96,
+      96
+    ],
+    "xxhdpi": [
+      144,
+      144
+    ],
+    "xxxhdpi": [
+      192,
+      192
+    ]
+  },
+  "limitations": [
+    "Alpha-1 noise outside the visible mark was preserved, not retouched.",
+    "Android rounding, inflation, masking and launcher rendering still require Android Studio/device validation."
+  ]
+}

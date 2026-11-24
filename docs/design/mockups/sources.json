@@ -1,0 +1,45 @@
+{
+  "images": [
+    {
+      "file": "mockups/01.png",
+      "original_name": "Морошка: умная база знаний и заметок.png",
+      "sha256": "a15ed42998bc35a554adaea0fb8c9b1f6eae595c98d0d3ad005bb4cd6a896aa2",
+      "bytes": 1950388,
+      "provenance": "original-conversation-image",
+      "pixel_edited": false
+    },
+    {
+      "file": "mockups/02.png",
+      "original_name": "Морошка: заметки и граф знаний.png",
+      "sha256": "2dcddad18c2bc5f532c8818d175ffc3a5729dcc07f549381713e28d83589ee63",
+      "bytes": 2046121,
+      "provenance": "original-conversation-image",
+      "pixel_edited": false
+    },
+    {
+      "file": "mockups/03.png",
+      "original_name": "Морошка: знания, связи и идеи.png",
+      "sha256": "c100ca8a71d4526a5ce851cd033cc732c7fb1bafbc415cb21ca7a58818e7cf34",
+      "bytes": 2046406,
+      "provenance": "original-conversation-image",
+      "pixel_edited": false
+    },
+    {
+      "file": "mockups/04-asset-board.png",
+      "original_name": "Дизайн-система приложения «Морошка».png",
+      "sha256": "dc5a9516eae54563f42b2b8f7c6af7265a8ed96d2d0a4c360cb8a96f8691ae33",
+      "bytes": 2142041,
+      "provenance": "original-conversation-image",
+      "pixel_edited": false
+    },
+    {
+      "file": "mockups/05-approved-reference.png",
+      "original_name": "11456.png",
+      "sha256": "d46758cc863a580c9ec5aed6877415d1579b3d02fc90961fa29292b15b4f0a01",
+      "bytes": 452941,
+      "provenance": "original-conversation-image",
+      "pixel_edited": false
+    }
+  ],
+  "note": "Оригинальные изображения и приложенная пользователем версия сохранены побайтно. Все подписи и примеры — часть концептов, не данные приложения."
+}

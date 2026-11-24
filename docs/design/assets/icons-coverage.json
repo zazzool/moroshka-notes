@@ -1,0 +1,195 @@
+{
+  "reference": "Original board, icon grid at left, four rows: 7+7+7+6.",
+  "status": "27 visible slots have standalone editable SVG equivalents; hand-drawn reconstructions, not extracted vectors.",
+  "source_existing_svg_count": 20,
+  "new_svg_count": 17,
+  "total_svg_count": 37,
+  "rows": [
+    [
+      {
+        "slot": "1.1",
+        "name": "home",
+        "label_ru": "Главная",
+        "file": "icons/home.svg"
+      },
+      {
+        "slot": "1.2",
+        "name": "search",
+        "label_ru": "Поиск",
+        "file": "icons/search.svg"
+      },
+      {
+        "slot": "1.3",
+        "name": "plus",
+        "label_ru": "Добавить",
+        "file": "icons/plus.svg"
+      },
+      {
+        "slot": "1.4",
+        "name": "library",
+        "label_ru": "Библиотека",
+        "file": "icons/library.svg"
+      },
+      {
+        "slot": "1.5",
+        "name": "graph",
+        "label_ru": "Связи",
+        "file": "icons/graph.svg"
+      },
+      {
+        "slot": "1.6",
+        "name": "layers",
+        "label_ru": "Слои",
+        "file": "icons/layers.svg"
+      },
+      {
+        "slot": "1.7",
+        "name": "save",
+        "label_ru": "Сохранить",
+        "file": "icons/save.svg"
+      }
+    ],
+    [
+      {
+        "slot": "2.1",
+        "name": "checkbox",
+        "label_ru": "Отметка",
+        "file": "icons/checkbox.svg"
+      },
+      {
+        "slot": "2.2",
+        "name": "calendar",
+        "label_ru": "Календарь",
+        "file": "icons/calendar.svg"
+      },
+      {
+        "slot": "2.3",
+        "name": "folder",
+        "label_ru": "Папка",
+        "file": "icons/folder.svg"
+      },
+      {
+        "slot": "2.4",
+        "name": "tag",
+        "label_ru": "Тег",
+        "file": "icons/tag.svg"
+      },
+      {
+        "slot": "2.5",
+        "name": "link",
+        "label_ru": "Ссылка",
+        "file": "icons/link.svg"
+      },
+      {
+        "slot": "2.6",
+        "name": "mic",
+        "label_ru": "Голос",
+        "file": "icons/mic.svg"
+      },
+      {
+        "slot": "2.7",
+        "name": "waveform",
+        "label_ru": "Звук",
+        "file": "icons/waveform.svg"
+      }
+    ],
+    [
+      {
+        "slot": "3.1",
+        "name": "image",
+        "label_ru": "Изображение",
+        "file": "icons/image.svg"
+      },
+      {
+        "slot": "3.2",
+        "name": "play",
+        "label_ru": "Воспроизведение",
+        "file": "icons/play.svg"
+      },
+      {
+        "slot": "3.3",
+        "name": "paperclip",
+        "label_ru": "Вложение",
+        "file": "icons/paperclip.svg"
+      },
+      {
+        "slot": "3.4",
+        "name": "settings",
+        "label_ru": "Настройки",
+        "file": "icons/settings.svg"
+      },
+      {
+        "slot": "3.5",
+        "name": "bell",
+        "label_ru": "Уведомление",
+        "file": "icons/bell.svg"
+      },
+      {
+        "slot": "3.6",
+        "name": "user",
+        "label_ru": "Профиль",
+        "file": "icons/user.svg"
+      },
+      {
+        "slot": "3.7",
+        "name": "attachment",
+        "label_ru": "Прикрепить",
+        "file": "icons/attachment.svg"
+      }
+    ],
+    [
+      {
+        "slot": "4.1",
+        "name": "lightning",
+        "label_ru": "Молния",
+        "file": "icons/lightning.svg"
+      },
+      {
+        "slot": "4.2",
+        "name": "brain",
+        "label_ru": "Мозг",
+        "file": "icons/brain.svg"
+      },
+      {
+        "slot": "4.3",
+        "name": "heart",
+        "label_ru": "Сердце",
+        "file": "icons/heart.svg"
+      },
+      {
+        "slot": "4.4",
+        "name": "sun",
+        "label_ru": "Солнце",
+        "file": "icons/sun.svg"
+      },
+      {
+        "slot": "4.5",
+        "name": "moon",
+        "label_ru": "Луна",
+        "file": "icons/moon.svg"
+      },
+      {
+        "slot": "4.6",
+        "name": "stopwatch",
+        "label_ru": "Таймер",
+        "file": "icons/stopwatch.svg"
+      }
+    ]
+  ],
+  "repairs": [
+    "link.svg: contained strokes in viewBox",
+    "layers.svg: bottom inset for round strokes"
+  ],
+  "extra_existing_icons": [
+    "note",
+    "check",
+    "close",
+    "edit",
+    "send",
+    "pause",
+    "stop",
+    "back",
+    "more",
+    "sparkles"
+  ]
+}

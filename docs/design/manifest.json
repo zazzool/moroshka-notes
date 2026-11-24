@@ -1,0 +1,1536 @@
+{
+  "name": "Moroshka design handoff",
+  "version": "2.2",
+  "date": "2026-11-24",
+  "scope": "docs/design/",
+  "self_exclusion": [
+    "manifest.json",
+    "CHECKSUMS.sha256"
+  ],
+  "summary": {
+    "files_listed": 190,
+    "bytes_listed": 61909182,
+    "original_images": 5,
+    "artwork_masters": 18,
+    "interface_svg_icons": 37,
+    "interface_png_icons": 37,
+    "board_icon_slots": 27
+  },
+  "files": [
+    {
+      "path": "AGENT.md",
+      "bytes": 1682,
+      "sha256": "901b8ae63bb510ec8f00bd2235b824c4aa5d7211f42faa528b3f6c984f2b71c8",
+      "git_blob_sha": "9df80882885924354a0901cc2aa58e671d051e58"
+    },
+    {
+      "path": "ASSET_COVERAGE.md",
+      "bytes": 6698,
+      "sha256": "a6f7636f78a637ef0a69c24e393514234fa3baf3ac0f591fb51b0251b8b43b3b",
+      "git_blob_sha": "8e125f2374c4e09f09537a4e564209ecc5878122"
+    },
+    {
+      "path": "HANDOFF.md",
+      "bytes": 7526,
+      "sha256": "5849f8af72b31712eb970350d2ed42cb6799d52bacb88f356c31c66b05a3ea19",
+      "git_blob_sha": "2a5582c2f3faca9802fd6c779ea5a74c05a29375"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5221,
+      "sha256": "9b9057fea8245c6ca966b40760e1e685f29d674965f74780541c5df1487246e0",
+      "git_blob_sha": "295374ff9889f6339a7c99d2d19250ed70ce7d4f"
+    },
+    {
+      "path": "SOURCES.md",
+      "bytes": 6175,
+      "sha256": "6e02e0f41e7a37cdfe14e9891227bca3a7229ed8747d442c9a012b9638e25e25",
+      "git_blob_sha": "0877cdbfd3808c6ab579c271d3513fc0300c3f26"
+    },
+    {
+      "path": "SPEC.md",
+      "bytes": 7570,
+      "sha256": "999f30162487de80567efed371b28fb872b1118c2f68d64acf542c77edd73e25",
+      "git_blob_sha": "e1527dbd0e6461be54bbb70315522fb78b6d4396"
+    },
+    {
+      "path": "VALIDATION.md",
+      "bytes": 4199,
+      "sha256": "5988470d4884594bd17d0b3ab11307df8b5d1618d4909ec61fe8318e3244a441",
+      "git_blob_sha": "aa1398fbae24da3547772e189ace872c725c6c51"
+    },
+    {
+      "path": "assets/README.md",
+      "bytes": 2479,
+      "sha256": "eb12c5b000993a42bfcee66fad6865ad3fb72a7d1d59293fb4c2fb9760494648",
+      "git_blob_sha": "4ad5f0409575343643e09171ea5391f57005f9f8"
+    },
+    {
+      "path": "assets/backgrounds/dawn.svg",
+      "bytes": 571,
+      "sha256": "55b7be9fbb88875382738ee4cef13c6719cc2d3962065650ab30b997a46929cd",
+      "git_blob_sha": "cb7119f0dfd975e61efc0b2e208c3e0300e7254d"
+    },
+    {
+      "path": "assets/backgrounds/night.svg",
+      "bytes": 571,
+      "sha256": "c972b751ca60d3a35a600761ba0ed12756244b9a5be190dbfb8b3bfcb7d4c56f",
+      "git_blob_sha": "243cf06b90f3fa824a715bdae1386d8a044b38fb"
+    },
+    {
+      "path": "assets/backgrounds/sunset.svg",
+      "bytes": 571,
+      "sha256": "c6d3a25aa52cdf5093cf373a7355b213525479375434891473a1b0db3b19f695",
+      "git_blob_sha": "950b9861f6cb43169a24a3cabd5dc271a4b59051"
+    },
+    {
+      "path": "assets/brand/app-icon.svg",
+      "bytes": 1305,
+      "sha256": "09a4a432dc7d570831bf66c9cee388834c0ec9679e47475630287cc9274f170e",
+      "git_blob_sha": "f6fad5dfe9e0e017a8d4e6a15e2e29a48eac0938"
+    },
+    {
+      "path": "assets/brand/cloudberry-mono-orange.svg",
+      "bytes": 523,
+      "sha256": "2695c6d628ed24f62f198b7a6377d52ffd0c4ca1177af523677f911af7e3d980",
+      "git_blob_sha": "a17921c49414383fd2d44159749db541709dd44a"
+    },
+    {
+      "path": "assets/brand/cloudberry-mono-plum.svg",
+      "bytes": 523,
+      "sha256": "d839a507e1bef44f69c3d4594f33dc9857253b0e0c253c45d8eb85fdff903fae",
+      "git_blob_sha": "03518e3b2ef170bf59bac09629ddf7e0da2f472d"
+    },
+    {
+      "path": "assets/brand/cloudberry.svg",
+      "bytes": 1114,
+      "sha256": "88b9f1cfc3567bca8cf26a0bda481877f4088b714eb1f96047339c1504919405",
+      "git_blob_sha": "f22bfd855cec216754fd04aad736b0ac3060fa5e"
+    },
+    {
+      "path": "assets/brand/wordmark-orange.svg",
+      "bytes": 723,
+      "sha256": "c87500eeeed129a1f309acd44df72083fa6731022864ea3e48bff491fa148c28",
+      "git_blob_sha": "d0604972950a5e225e9497ab05275c3be3bc32ef"
+    },
+    {
+      "path": "assets/brand/wordmark-plum.svg",
+      "bytes": 723,
+      "sha256": "2d2e6b8d8cb7743958f3fc5f11ffa7b2beb5162091ade5f1b834934c2ce703cc",
+      "git_blob_sha": "30530a1895a5fa08915e162045f72f0de2b23db3"
+    },
+    {
+      "path": "assets/catalog.json",
+      "bytes": 13645,
+      "sha256": "5866917a6eb72c366ac50b71408389d923e14415763de9d550c80877201ecdb8",
+      "git_blob_sha": "2fa98c652fe636530c22554d4848549f6fbc86ae"
+    },
+    {
+      "path": "assets/components/README.md",
+      "bytes": 6429,
+      "sha256": "a8d153642a397383f615fd6d3d7993034c95e65d8b65cbeaedf5295fc4f67b87",
+      "git_blob_sha": "7e7f44cadc60caeaff80f24447a5281a992cad9a"
+    },
+    {
+      "path": "assets/components/icons-sprite.svg",
+      "bytes": 4822,
+      "sha256": "7d35df973ba5cfdd11967cf0243f0c5180bbd65a8f66f9417ee0340f6458bf82",
+      "git_blob_sha": "e20314def63b51ad1c7d079d3e496194316e0a37"
+    },
+    {
+      "path": "assets/components/showcase.html",
+      "bytes": 23270,
+      "sha256": "27bf8c28e3c1249bdfe53640476eb931b32543309d2c52f2badb5d3c9ff3a248",
+      "git_blob_sha": "5598817240b2214f33b65bc8bc69a551f8ce32da"
+    },
+    {
+      "path": "assets/components/ui-kit-preview.png",
+      "bytes": 328523,
+      "sha256": "01f68f2b87176801cee1c4ec53c89437baa6cd4ae22a17b59ff35f28543c340d",
+      "git_blob_sha": "17245c20ca28bd1fb34e1f326188b6a4f97d8ba7",
+      "width": 1440,
+      "height": 1560,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/components/ui-kit.svg",
+      "bytes": 33415,
+      "sha256": "4a0904bc35ea90ede12853625fc27ba3e5f31f25de0db5fb2b0753395eb804e4",
+      "git_blob_sha": "40f695287519fec51194b77fda89a148ca9aba68"
+    },
+    {
+      "path": "assets/effects/components.css",
+      "bytes": 10279,
+      "sha256": "58eac08b9cce2155974b419838ca7a5cf9aaa6a0dc1cdcfe55112a15950db65d",
+      "git_blob_sha": "e8cec30e88632197c9383ef8610dcc1768c725e8"
+    },
+    {
+      "path": "assets/effects/theme.css",
+      "bytes": 385,
+      "sha256": "d6e94b02ebf1fd8c53bd67c6ba261191a24954a5ce1edcf7dbe7f7e9d56a403a",
+      "git_blob_sha": "161752e3a31d15ce06cf0c8d6b95749185f64169"
+    },
+    {
+      "path": "assets/fonts/METADATA.pb",
+      "bytes": 732,
+      "sha256": "fb204147a7c16d009d4fa53248b6075bc941d7adfa450a825bc5d4cef2f9ded9",
+      "git_blob_sha": "3e79d88e5324a509c44005bc94449d0a93f34fc7",
+      "provenance": "google-fonts-manrope-OFL-1.1"
+    },
+    {
+      "path": "assets/fonts/Manrope-Variable.ttf",
+      "bytes": 164700,
+      "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+      "git_blob_sha": "75274da58537d6123b14f2cd0c355ad4681fc2b3",
+      "provenance": "google-fonts-manrope-OFL-1.1"
+    },
+    {
+      "path": "assets/fonts/OFL.txt",
+      "bytes": 4387,
+      "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b",
+      "git_blob_sha": "e271172a9ed0cddc895aabb6509f1c7d880b492d",
+      "provenance": "google-fonts-manrope-OFL-1.1"
+    },
+    {
+      "path": "assets/generation.json",
+      "bytes": 25263,
+      "sha256": "83eed64f38016dee22d6bc177e53615fcc0a286cb624ded631567ff6594cf62f",
+      "git_blob_sha": "975cf54e6afa8197427bb21a4466a1fed199d78e"
+    },
+    {
+      "path": "assets/icons/attachment.svg",
+      "bytes": 299,
+      "sha256": "120856985fcb4e078c9785a7af1ae985c1837b395edca70eb1e693eb7fd495ce",
+      "git_blob_sha": "4029db8cf30120a818cf539eb552a2aaae7e3118"
+    },
+    {
+      "path": "assets/icons/back.svg",
+      "bytes": 191,
+      "sha256": "53103ca61820a8295fff0e0bb8cf00b59cf9f2a5f67a4054475257e11296da3d",
+      "git_blob_sha": "2e44a422e29a61133e3fa3e3ea68667fb71e1864"
+    },
+    {
+      "path": "assets/icons/bell.svg",
+      "bytes": 249,
+      "sha256": "1f5c62554a66aca3abe7fe929bbd9083941b8da2978f74f137980214f3c80208",
+      "git_blob_sha": "168835dc0ee7d3faec231f11d20c18083ed83258"
+    },
+    {
+      "path": "assets/icons/brain.svg",
+      "bytes": 394,
+      "sha256": "43885c67f5fee4955980da20494643fef30426d14640acdcdbb6eb5b3a52e984",
+      "git_blob_sha": "493544c794f27cad15f502cc65d5cf757c84c70c"
+    },
+    {
+      "path": "assets/icons/calendar.svg",
+      "bytes": 286,
+      "sha256": "e1d06a3f672e82b1f4b3a7064c5d9037633f6789642a45e4fa89c02da194648d",
+      "git_blob_sha": "ff0ef7904f1b20426aab2c1add7ed6c64c8c87ba"
+    },
+    {
+      "path": "assets/icons/check.svg",
+      "bytes": 192,
+      "sha256": "b1e315a19f569268a2f1102d87cbc2f7c4730701c756ef943b2853b5b9da1285",
+      "git_blob_sha": "6b6dcb7f368e7988fa336bd7dd36107f3af7747b"
+    },
+    {
+      "path": "assets/icons/checkbox.svg",
+      "bytes": 264,
+      "sha256": "334610bd413a0a0fbcd5a5e18e22245e192a86049b23f8ee1bf684c88b84091e",
+      "git_blob_sha": "c74a5cce34a0a763b3c5c58e8ea67028b49076ab"
+    },
+    {
+      "path": "assets/icons/close.svg",
+      "bytes": 198,
+      "sha256": "30313f96301c6dc3d08030da6f3bd5987f974be926ad64deb8b5ef58954c0631",
+      "git_blob_sha": "5fdcd563845e129bca0dc9894306315327038250"
+    },
+    {
+      "path": "assets/icons/edit.svg",
+      "bytes": 210,
+      "sha256": "7453fb13cf3c105aa15a053fffbb3e88ab500b3ef05274a3aba90cce697bc6bf",
+      "git_blob_sha": "f6262c6d8f037258bc8eb4548b1de8d702f1cb0e"
+    },
+    {
+      "path": "assets/icons/folder.svg",
+      "bytes": 196,
+      "sha256": "d10f9107a325c91058de028427c3b9942afc3d179fa6ad7690153be7595f9210",
+      "git_blob_sha": "cfc1fd82b66aa3d3c1938359aeb558223d0181c9"
+    },
+    {
+      "path": "assets/icons/graph.svg",
+      "bytes": 293,
+      "sha256": "32d0cf299376989136d71bd9d2335dc57100412de0c9d9d71a703c287b969f2a",
+      "git_blob_sha": "b9c76bff42bd05a9b2a7dd61a5ffbb973dd651cf"
+    },
+    {
+      "path": "assets/icons/heart.svg",
+      "bytes": 252,
+      "sha256": "d37870d194162104209ecaf3811be2a8621734c467531eead02d4f6ca822f89e",
+      "git_blob_sha": "0d8050012ef9bede94a57f92a955edf6f970c0e5"
+    },
+    {
+      "path": "assets/icons/home.svg",
+      "bytes": 207,
+      "sha256": "dc4a02506f157cb471641ee74b7394947a68dd75aef56eaf127e71aa5c2ec345",
+      "git_blob_sha": "657a610a7dc0f6146a6b17e4754562881595954f"
+    },
+    {
+      "path": "assets/icons/image.svg",
+      "bytes": 303,
+      "sha256": "66bad4b5e21a138d7f7ebb0acbafebeeaf5962c6e80fbba342d2858d2bd35977",
+      "git_blob_sha": "fe7a491cb45c574a961be46e08e937800c6b3f7e"
+    },
+    {
+      "path": "assets/icons/layers.svg",
+      "bytes": 256,
+      "sha256": "3b8b653574a023520510601f5aaeeeb04b6331650c12cca9c62ce6e940af4d7e",
+      "git_blob_sha": "ee6165d5d6baa05ab79ab946136d50ae2db08015"
+    },
+    {
+      "path": "assets/icons/library.svg",
+      "bytes": 260,
+      "sha256": "3d7d46cb4f8197d980a2648ad16e0424083e018c6cac866fe9ea47b73b45fa49",
+      "git_blob_sha": "34d7c0ccbc6c38db02ef889356216b009af65464"
+    },
+    {
+      "path": "assets/icons/lightning.svg",
+      "bytes": 229,
+      "sha256": "b46ddcf4de45c71c1c69fc175278782b10aa0e79648252b4c6931cf7c1ba6eae",
+      "git_blob_sha": "c2132f1b64d066f37fde8ed8cc6a517d622c8b5c"
+    },
+    {
+      "path": "assets/icons/link.svg",
+      "bytes": 279,
+      "sha256": "0c7e04000ff7fe808949347ab76ad1987d785529fa2b55543ab0d988f2f6efeb",
+      "git_blob_sha": "914580a79d3f947de9425a797951fae872ccfacf"
+    },
+    {
+      "path": "assets/icons/mic.svg",
+      "bytes": 266,
+      "sha256": "a88044c405c271a87534f951c7e192345efa43da693095c778c53db7986bf11c",
+      "git_blob_sha": "7ee5c9085f871065b7d4c9a3d32b7c240f8bf8a0"
+    },
+    {
+      "path": "assets/icons/moon.svg",
+      "bytes": 246,
+      "sha256": "6deb2bdc9668dfb070bff2f2e27590d86d28a8abb2b45d245bde335f2aba62be",
+      "git_blob_sha": "cb3f2a5a4c5155ab2bee344ce34592314fccec28"
+    },
+    {
+      "path": "assets/icons/more.svg",
+      "bytes": 258,
+      "sha256": "35512b0e484e7b475a415bf8fc0481dc283b87a1d3a7fecfefe9bcc98dfdb2e8",
+      "git_blob_sha": "d850c432048488f5caea42864c358ac18295337a"
+    },
+    {
+      "path": "assets/icons/note.svg",
+      "bytes": 218,
+      "sha256": "8975bbff813fbd2851c0fc7222f4f341a41532808a5dfaf79341013d2fb0bd99",
+      "git_blob_sha": "552af73e8e561a8db3b36e74bcea8be91d4805c7"
+    },
+    {
+      "path": "assets/icons/paperclip.svg",
+      "bytes": 271,
+      "sha256": "aaaf9d38638cb6baa03cc6d2228dd1c0964a4a70813a286376ee893e126dd2fc",
+      "git_blob_sha": "df9c4d2cd4aa8b012652fab4224e0552f5e2eb92"
+    },
+    {
+      "path": "assets/icons/pause.svg",
+      "bytes": 193,
+      "sha256": "244892ac4e47f195f09b5fb94ba8b6362522f0b1872974b8f0905f5a55ccf00f",
+      "git_blob_sha": "593b77cefaadeb420f2ba7246608324d08f641b0"
+    },
+    {
+      "path": "assets/icons/play.svg",
+      "bytes": 265,
+      "sha256": "706f4802c8b6babac113d43d08b887d67e0607e73272da775e7cb5ef5d771b04",
+      "git_blob_sha": "fe789e50cff143fd507784528dc7e74e3e4ff1c3"
+    },
+    {
+      "path": "assets/icons/plus.svg",
+      "bytes": 194,
+      "sha256": "8ac4b0ee37f96d475d64d6b557a1846428020677ec5aa88a68d8fca526aef368",
+      "git_blob_sha": "fcebbf3229aface6c3aca0d4308ab55beae37a4e"
+    },
+    {
+      "path": "assets/icons/save.svg",
+      "bytes": 277,
+      "sha256": "30e2241b48904760c15eda7120d40a6fd758e45f42be33530434714c06d9439f",
+      "git_blob_sha": "24b29a3e6b2630ebb2126658ec71a78ea7ee327d"
+    },
+    {
+      "path": "assets/icons/search.svg",
+      "bytes": 225,
+      "sha256": "a8aa799f6ed2035f65fea1f6a222ee3967b26eb67b5010bbb9795976c25bb4f9",
+      "git_blob_sha": "0cbd5f50fd33eee51f65dd4a3f118f4c8dce7407"
+    },
+    {
+      "path": "assets/icons/send.svg",
+      "bytes": 205,
+      "sha256": "b1a99c65b8c64cf1c06945d125b863c27640e1236ce3172a21a56d5899969f5e",
+      "git_blob_sha": "6c1e374ebeff22a77ed7c1cf84a67ed7146d65d6"
+    },
+    {
+      "path": "assets/icons/settings.svg",
+      "bytes": 451,
+      "sha256": "71885b3fee0dd208d4c469b6a8c64587e4419673f8ac1b6a13819ec5cc2c36dd",
+      "git_blob_sha": "97a088428b45b778d2fdd34890d980f4d2ad94c9"
+    },
+    {
+      "path": "assets/icons/sparkles.svg",
+      "bytes": 235,
+      "sha256": "3a116525694d6655ca2311550998560debba858c1301d4972683d54ab0dd00c7",
+      "git_blob_sha": "7876993bdb2679fa44435ce8995c535dcae61b97"
+    },
+    {
+      "path": "assets/icons/stop.svg",
+      "bytes": 215,
+      "sha256": "3f7ebaa8aba64c5dfd63449dbca7808a0d38d9b3fbdeae1893ac0a93fe72b192",
+      "git_blob_sha": "576e8c3b9151ad11f9187bdd7df19107af0a8762"
+    },
+    {
+      "path": "assets/icons/stopwatch.svg",
+      "bytes": 270,
+      "sha256": "1d3f5ddb96d308a95b87829e8d92f16265ff1d97ee12ee38618a7a66b5524848",
+      "git_blob_sha": "f614f51c471c47207a1d1b273f5acb712a7bd36b"
+    },
+    {
+      "path": "assets/icons/sun.svg",
+      "bytes": 320,
+      "sha256": "0f9025bfd273e8159eee72e08d43ce4c3e4d0da598da30180722bbcb74399a59",
+      "git_blob_sha": "3df0cc9dde5865ea5ba486dc0b2bb8001789518b"
+    },
+    {
+      "path": "assets/icons/tag.svg",
+      "bytes": 226,
+      "sha256": "ca335ecda1b53200fd7e3fcd0438bd5c612ce34769a28d7e3143329e7b9157ff",
+      "git_blob_sha": "ac54bb1b2dfbc705d431a857631d03ae497edcf2"
+    },
+    {
+      "path": "assets/icons/user.svg",
+      "bytes": 288,
+      "sha256": "5e16922e3e10ed1e56bd954287f5ed5a513c7dac3fa6a7d0726f4f004002bafe",
+      "git_blob_sha": "c36938085f8da9a082faaebde9cd7e71181a2d20"
+    },
+    {
+      "path": "assets/icons/waveform.svg",
+      "bytes": 253,
+      "sha256": "491a77d03c186a924740a0a1a6f1fac2bb29ae1535a69b3d5305f6cc35d58d83",
+      "git_blob_sha": "d1a9d8138a0bce4e13f709919196fee06eeae8f8"
+    },
+    {
+      "path": "assets/icons-coverage.json",
+      "bytes": 4363,
+      "sha256": "8d74811af811b3ce7f8a1a3a26aa23236181cb081720d1cce72fcfc70c4931ec",
+      "git_blob_sha": "9a8b7f54ec9d154924b7887ebe835da8cf38ea58"
+    },
+    {
+      "path": "assets/icons-png/attachment.png",
+      "bytes": 2995,
+      "sha256": "720a035d0c5f656e62b12fea5ba9bc6ccda3025d8d39c2b8580748759de97216",
+      "git_blob_sha": "7c892ac92a56870b7efbb3137ec8d32b69b4387f",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/back.png",
+      "bytes": 835,
+      "sha256": "f63fce5fd9edef96da099337027ab6b9d0917264181bcf6cdb571d31a16e5b18",
+      "git_blob_sha": "49842720d15b3721989f32610f42c7972e297431",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/bell.png",
+      "bytes": 1872,
+      "sha256": "cb13f0b24285405644f0c48a935de8426ebaf4c2d721a0d11b1ad24b9a985ec5",
+      "git_blob_sha": "bd450ab06bd3351b7e79fea635c8064471885153",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/brain.png",
+      "bytes": 4232,
+      "sha256": "f9ac3657c8c862c33309976c5a2e06b730cb8bcd5e1c9ac423a2f674f3147597",
+      "git_blob_sha": "b1ed1d827129da28fe93f93aabcb931d1e659c86",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/calendar.png",
+      "bytes": 2072,
+      "sha256": "c8520300cb5c84e607bff85374e41293146d134e8db3db76013c2eb8af7aee5e",
+      "git_blob_sha": "1ecb28b8398f398cf05d0f64a72788d380824261",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/check.png",
+      "bytes": 901,
+      "sha256": "4309e3f9152089a79611b42850971187f5e3cc4a405b3d13f358e7ddb0981fe5",
+      "git_blob_sha": "98f84202bca02098e8840fa21e2c2c605c00d50f",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/checkbox.png",
+      "bytes": 1874,
+      "sha256": "ad0500a360d2fb048029090de975b1453f94815389a0712c2550cbdc4900f834",
+      "git_blob_sha": "4549acb05598e84c41ac616856982c0dea258b93",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/close.png",
+      "bytes": 1068,
+      "sha256": "ee7405e292437781b248f8c3559f03a08cd57ceb3d180395ecfebc4a2dec71c9",
+      "git_blob_sha": "ecd69ce7167ccbf6d6863688582d31e994cd41df",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/edit.png",
+      "bytes": 1185,
+      "sha256": "6203201f08fb2fe75a741fff5d8797714aa2fc916d56d221b335687e14f78e88",
+      "git_blob_sha": "7f508ea28da2a523dcd6d2e74916b29ff103ac48",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/folder.png",
+      "bytes": 872,
+      "sha256": "c4d9a36b92024cef8ddec8ac6792947ee04d4c0126e5d47c7837b9b653e210a1",
+      "git_blob_sha": "c50ce970a76c2c73e9a69174f7fd48effe079112",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/graph.png",
+      "bytes": 2158,
+      "sha256": "662ebf0ee52a78e6a79d0fef6f1dfcc1cce7ff2f2125fd15887ac1f022d5e8d0",
+      "git_blob_sha": "0691f5fc8e32cf1828e4f6bfd1224e2e1d1fa0aa",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/heart.png",
+      "bytes": 3653,
+      "sha256": "b4f0f43a7056f100ea5eab4fc12d986b61eef6ef5188b31a30909b664e8fd8fb",
+      "git_blob_sha": "e0574fbfc13b49a02a7f52cb09f905231ba6d1c5",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/home.png",
+      "bytes": 1362,
+      "sha256": "7191542e3445d5c42a1b7f4ba1c93a782d842f145fa5f4a0ecd690be5c5610ad",
+      "git_blob_sha": "95905e529c65c3822f10c691a11bf08e6774e87e",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/image.png",
+      "bytes": 2757,
+      "sha256": "60b2710be235ba02715cb66cb48188e3d99285718e37a73b1b873421d5eff7b9",
+      "git_blob_sha": "cf94adf596ecfa9659889552715afa83e6173d25",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/layers.png",
+      "bytes": 2343,
+      "sha256": "a4dbf95b16c4b5273345e6740555a8d48f0991ac38d1fba5c1493d7c3f1fa2a5",
+      "git_blob_sha": "2827629cd1efb0c817aea755c2017d054d297408",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/library.png",
+      "bytes": 1334,
+      "sha256": "aff426028830ae34ff23413922503d7dc1452a5c95b62fc594d43ced6e85addd",
+      "git_blob_sha": "bce39166cfb95e55292180631f5eb2c7d3d08241",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/lightning.png",
+      "bytes": 2209,
+      "sha256": "1548738f9bf39d7b8760ba4a04532661aa85a38818257a635b7b48f80eb1ae69",
+      "git_blob_sha": "d23e245360a51688350cd09dbce2ae6e3841baa8",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/link.png",
+      "bytes": 2541,
+      "sha256": "03de4af30fbded17e6c3567d145c5f6cf77e9ac7d302dc0ad947f99c4536757c",
+      "git_blob_sha": "9505ce32e33b0aa8c320aec81fddc76939d6c9cb",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/mic.png",
+      "bytes": 2642,
+      "sha256": "2e29ccc4edd68978436eee2e58f7624129158cab1acf35762a1c1a59fd90a278",
+      "git_blob_sha": "e1d601cd23375cd31b22e7f3251c14c4de1cefec",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/moon.png",
+      "bytes": 3200,
+      "sha256": "8e8a222a0d6c422b49dcc60f19e3fba07ac67c8f4a733967a31982c9370e06ff",
+      "git_blob_sha": "c64d4a4fcec725e1c351755061569c0be2a895c3",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/more.png",
+      "bytes": 752,
+      "sha256": "0416fb944af48b67538840cfa0cbdd64e2770c9fcb1dcddc2d5269c1a83093ed",
+      "git_blob_sha": "16efc9d26499262521fcc3241940355553315d5b",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/note.png",
+      "bytes": 940,
+      "sha256": "db1bc134b5ae8fe93ea2b881e40205d06b2813be28f3225b5e68ac9dd2926fd4",
+      "git_blob_sha": "53731143f43edd1ab0eb0b5e2ca0e4a6a6ac96b3",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/paperclip.png",
+      "bytes": 2555,
+      "sha256": "c908484317761e3eac1d1487faf3888d575641f0706c24464f7e7106b1a3ca33",
+      "git_blob_sha": "3b1c631b2868675ce85a15f4bec5f6e9ad0af409",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/pause.png",
+      "bytes": 500,
+      "sha256": "4c5bf0195f28a30f364aba69e57de4061e791a49f64e3c44d8489b6ca6201403",
+      "git_blob_sha": "08ed98bc98acea5c6a71e31b68c470fa9cd34875",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/play.png",
+      "bytes": 2822,
+      "sha256": "b21a8a2fdc4d2997f4409361c3cefe7d15eaa8325fcaae3eade76219ab2aa993",
+      "git_blob_sha": "ee9390a1fc890a65b30e079c7bc9152d78b17c5d",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/plus.png",
+      "bytes": 591,
+      "sha256": "4aa54d0967b499ec0d377d118b96092dec2bcb20fac1e2ab476962b4de67602b",
+      "git_blob_sha": "644f4c8afe1ec9ae43bad4565b1b06457a467869",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/save.png",
+      "bytes": 1254,
+      "sha256": "69b1f7b429c65f09e748a4e5a7555037ba9d0ea6784b923c8db7483f828096ef",
+      "git_blob_sha": "a25cb1f441cc1e39647dc86416700ea2241c96fb",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/search.png",
+      "bytes": 2540,
+      "sha256": "507a7c15b184f0857a31a1365f15ff2d412db8ca27583c65869c9521f3f7c615",
+      "git_blob_sha": "525c7c5c87072b805d1c5455ea64bd2c8765142f",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/send.png",
+      "bytes": 1426,
+      "sha256": "5a48a8f7a8c3d00666fcb78ed246749ad602c543d3abf8db23d595e16fe7c340",
+      "git_blob_sha": "2c10807253cf9d6a71e916c12dde3c3601a1243c",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/settings.png",
+      "bytes": 4519,
+      "sha256": "75c567674e094ca3160664f905e9b8998e9c8679749c7f07a4f7e2de699444c1",
+      "git_blob_sha": "a6702647b2867fd59f03a3bc42febb3a1b7ec3ee",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/sparkles.png",
+      "bytes": 1477,
+      "sha256": "e7c3942089ab8ee75a5ad485065480b30a6c13ad44ca2f91d3a5ed81ea36f75d",
+      "git_blob_sha": "a68ec366dfb0d8d1526ca1472f1c69dc03e96d06",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/stop.png",
+      "bytes": 1167,
+      "sha256": "c3af9a290143acb13c9dd600e0602fda7e54982afd6e8b883b791a40cb7878a0",
+      "git_blob_sha": "0e9204fa4bfc8892797fba6096cab62c575c4534",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/stopwatch.png",
+      "bytes": 3078,
+      "sha256": "441953e86c2134db7076438fe4c36b4fb655e3355cf0f4456863a613f1b54d9f",
+      "git_blob_sha": "deef55e42f56f0242fdf436160eaa1078cdb2485",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/sun.png",
+      "bytes": 2520,
+      "sha256": "5c62815857eae4c2e1b8f707af28d70e467a2f794156e3a063715610e934171f",
+      "git_blob_sha": "8dee258a1621227db14840ea28428e5b895351e9",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/tag.png",
+      "bytes": 1498,
+      "sha256": "5637b1f49f8d7a2cb28d7c40b68c39b697b5581555fe0ee3085ff13b53de7408",
+      "git_blob_sha": "2b503e3a4649ad26f44c47bfc9ce302edb95ff0f",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/user.png",
+      "bytes": 3038,
+      "sha256": "38ba864f24645fa9d785d5e171aa8f67939bc7ece8606a2c8b9b9294ea967d8e",
+      "git_blob_sha": "e8fd20b444cf111663742410ecdeca109942394b",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/icons-png/waveform.png",
+      "bytes": 736,
+      "sha256": "2125477f016fb22e75c2ea19fe242d20c9b3664ea414880ee91a0b82d14d5cfa",
+      "git_blob_sha": "449801bb327a583b43dc8b526e39efe2945c2cff",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/illustrations/connections.svg",
+      "bytes": 796,
+      "sha256": "124cb529545315af02640465589c8b96a1ba9a47321d845c53007e652775450c",
+      "git_blob_sha": "c875efcfda3e795859f985a7140bf5c85a230bb3"
+    },
+    {
+      "path": "assets/illustrations/ideas.svg",
+      "bytes": 382,
+      "sha256": "c0e103d4dbc2e2063f4db28dd9140c2941db3d965affca7a428574019e348a57",
+      "git_blob_sha": "03e5729e8a72d35449cb23a21f0cffa7a5d3d022"
+    },
+    {
+      "path": "assets/illustrations/knowledge.svg",
+      "bytes": 433,
+      "sha256": "da4c2153329df579d6ddb317fd7418e1d9e1ba7f4a0f424cba21ff5eb6ea4bd5",
+      "git_blob_sha": "8ee8097501df6ca49758e42e7dfce5e53a05c97b"
+    },
+    {
+      "path": "assets/masters/backgrounds/cloudberry-landscape-landscape.png",
+      "bytes": 2460833,
+      "sha256": "18ab52c5a0e417326787d5f8cd3e5dbffb5297b53ebddf22cfa3af70bb7b9c99",
+      "git_blob_sha": "4f0cf77e65d541cd91040b507a3b49d6f8e9192c",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/cloudberry-landscape-portrait.png",
+      "bytes": 2504494,
+      "sha256": "f824778122a085c9a76ff2c44a649ef4bd50a55fdb9e4a1b2041e896a3e2b068",
+      "git_blob_sha": "d580ce7496784e99d7a48ca18545ac685498aee9",
+      "provenance": "recreated-reference-master",
+      "width": 1055,
+      "height": 1491,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/cloudberry-macro-landscape.png",
+      "bytes": 1961000,
+      "sha256": "460c5e234cd41fecabfe05b78dad9244d5a400d0e0b13cf0c493f8ef4dc32619",
+      "git_blob_sha": "5d952aa044d2a51fa7d8bb954d3e51b2fd778d4e",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/cloudberry-macro-portrait.png",
+      "bytes": 1988753,
+      "sha256": "53330d35ab4289fe253139327aa3ed81c1c92ab6e50ea6841182169e00b6c2bf",
+      "git_blob_sha": "3d2dfcb715b8dedb4121e683face3df9349c14a9",
+      "provenance": "recreated-reference-master",
+      "width": 941,
+      "height": 1672,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/lake-sunset-landscape.png",
+      "bytes": 2192092,
+      "sha256": "5adeaf6dcd4ec56742b58858223ec23ac1f917d8e837aabf2735a2590fb29631",
+      "git_blob_sha": "df7d5773e7d4228bed693bfce6ed8419aa6e1738",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/lake-sunset-portrait.png",
+      "bytes": 2380605,
+      "sha256": "3dad79e71dfbd0fe94d4e9bc33ab7cd58d881afb21a88a88603520fb07ed29e4",
+      "git_blob_sha": "6d608b22a0032febb91331243da2f95f63ce256b",
+      "provenance": "recreated-reference-master",
+      "width": 1064,
+      "height": 1478,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/mountain-dawn-landscape.png",
+      "bytes": 3021240,
+      "sha256": "aaa1b71524663577febfe035cb0596600d61c8a4c877e45de76a9177a0443b8a",
+      "git_blob_sha": "8e6b4d6b52ac28ff1cfebb2d0b708565dc8d366f",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/mountain-dawn-portrait.png",
+      "bytes": 3077569,
+      "sha256": "16d415e6dbad64a159cc402a25113e81384891017d2c27d79557fa39440929b0",
+      "git_blob_sha": "fa16b5c289ab13af195a47038db5954cf8ceb0a5",
+      "provenance": "recreated-reference-master",
+      "width": 1064,
+      "height": 1478,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/starry-night-landscape.png",
+      "bytes": 2390315,
+      "sha256": "674edbbd1c4fbd657daa9f7ed52dde2d2bba617946acb34dea554b85ebf573fb",
+      "git_blob_sha": "237ac879535538b26b753134cb2129cef7a504c8",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/backgrounds/starry-night-portrait.png",
+      "bytes": 2479102,
+      "sha256": "c76dcffcbba5f7fd9cebd4596e2c3d3255de4fb9904adada85774d12d3de2dbb",
+      "git_blob_sha": "e71aa0a1b6d976d7893344148feb8688a7dd13c7",
+      "provenance": "recreated-reference-master",
+      "width": 1122,
+      "height": 1402,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/brand/app-icon-3d.png",
+      "bytes": 1845591,
+      "sha256": "6d8ba0af67e9d90552fcc76061cb5efeafaaf9e4aace0db261185f0073d212d1",
+      "git_blob_sha": "d898458d69d1b6fba5eef01263dc58ee620d81f9",
+      "provenance": "recreated-reference-master",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/brand/cloudberry-3d.png",
+      "bytes": 944804,
+      "sha256": "58e250065fc96944364c50e4385b6cd0bbb3a8f16e450a5df14a97e3f06bcd80",
+      "git_blob_sha": "70f550ef1d975e6f5142fb8628d104ffc96d709a",
+      "provenance": "recreated-reference-master",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/masters/brand/cloudberry-sprig.png",
+      "bytes": 1142563,
+      "sha256": "b7f2d435cd156b872385fcfb00f1cccf97b9dbfc46ef5766dff6b0595ebef420",
+      "git_blob_sha": "06a16b44f039c045b48dab5c21661c4580519479",
+      "provenance": "recreated-reference-master",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/masters/illustrations/balance-stones.png",
+      "bytes": 2654709,
+      "sha256": "22d843f7b4580acfc545621f8692b9adee7ec828641b7f6256e6045de3a97da0",
+      "git_blob_sha": "66808237b234e79aeae5756a2094983b0bf42655",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/illustrations/brain-glow.png",
+      "bytes": 1894941,
+      "sha256": "e6187ab90714bb70726499306a25e318ee40bb6aee6f59eb0ccd3acbc7856698",
+      "git_blob_sha": "f513a3f1f93861317e66924830eb8123929fa68a",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/illustrations/idea-tree.png",
+      "bytes": 2594736,
+      "sha256": "e52b79dce6b4449210e4aa169f9c62ac812b8daf2563868310f36caf8bce0b48",
+      "git_blob_sha": "eeb343ed03929ab51ef4858202709230571806b5",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/illustrations/knowledge-book.png",
+      "bytes": 1752323,
+      "sha256": "92057cfda1dd3b5ed3644e093aaf73abdc1f1572e54a6da11abaf3b8cbb41d0f",
+      "git_blob_sha": "f1ac50d7af664d74b0f67ee0a49472d11d86b010",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/masters/illustrations/neural-network.png",
+      "bytes": 1990666,
+      "sha256": "4f7f635a76e90c638bcff3c50378e0eaad3661948c2e13ffbb7f7d5fff54a8fe",
+      "git_blob_sha": "91a83d57a4a996e66a05d73cae0afa226001cc72",
+      "provenance": "recreated-reference-master",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/platform/android/README.md",
+      "bytes": 6878,
+      "sha256": "230003cd8ff0ac7f69f7ece20716c52d0b6196ac11b5a75446dcda15e4ec3a07",
+      "git_blob_sha": "5b263df606de26ef1d2bfecada6a54787f9fc45d"
+    },
+    {
+      "path": "assets/platform/android/res/drawable/moroshka_launcher_background.xml",
+      "bytes": 344,
+      "sha256": "5347857a4fb75d8f67f97441f816d6727d1fab36dd68ade0aa4a864bbfc283ff",
+      "git_blob_sha": "a6ebdc88d24c6ad51b5cff2163a09eaef1cc714c"
+    },
+    {
+      "path": "assets/platform/android/res/drawable/moroshka_launcher_monochrome.xml",
+      "bytes": 1514,
+      "sha256": "808473bc333b34568f7221b89906c9fd333c7ba62783f06a261cfd6edbe406c0",
+      "git_blob_sha": "37ccc9b65cf3a0e0717af7542e042ef88f542ed1"
+    },
+    {
+      "path": "assets/platform/android/res/drawable-nodpi/moroshka_launcher_foreground_art.png",
+      "bytes": 944804,
+      "sha256": "58e250065fc96944364c50e4385b6cd0bbb3a8f16e450a5df14a97e3f06bcd80",
+      "git_blob_sha": "70f550ef1d975e6f5142fb8628d104ffc96d709a",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/platform/android/res/drawable-v26/moroshka_launcher_foreground.xml",
+      "bytes": 477,
+      "sha256": "3f494af7baf6940d6d3b8aaabb86abc072659dbfaa56c1405d25a6a225ff83f6",
+      "git_blob_sha": "9b5f042e2ab3e91cfbd30b913b85a7b5b7be71eb"
+    },
+    {
+      "path": "assets/platform/android/res/mipmap-anydpi-v26/moroshka_launcher.xml",
+      "bytes": 285,
+      "sha256": "d312f152641da2c20ed127b5f26864d788f04ac7f68633c860e0b7a78a002431",
+      "git_blob_sha": "db0b97b1ba13daf7216a541dbd1f4a7c124d43ef"
+    },
+    {
+      "path": "assets/platform/android/res/mipmap-anydpi-v33/moroshka_launcher.xml",
+      "bytes": 362,
+      "sha256": "288fb53fdd2266f6c3e57f0180102f46d1726f7be871d6352eca2dbec740b198",
+      "git_blob_sha": "d45204b11e82f192a0734e0dc33c90281778aa0f"
+    },
+    {
+      "path": "assets/platform/android/res/mipmap-hdpi/moroshka_launcher.png",
+      "bytes": 8675,
+      "sha256": "3b6e453c4d8cfc7f14104ce86eeb72c05ec7a70af495c2e8bad944dab8942d26",
+      "git_blob_sha": "4ea537a2286d1dec1482ad42705bccd298e250af",
+      "width": 72,
+      "height": 72,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/platform/android/res/mipmap-mdpi/moroshka_launcher.png",
+      "bytes": 4326,
+      "sha256": "8b3a58c0de1d05e1de8ca031e4ef1791e8f4088e85b832cc53b5b5107e9b3d2b",
+      "git_blob_sha": "961e4247bcb41bc08cc06843f91be2ec9eb6d89a",
+      "width": 48,
+      "height": 48,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/platform/android/res/mipmap-xhdpi/moroshka_launcher.png",
+      "bytes": 14209,
+      "sha256": "63352680b50f5ec2757b24f53f8f641d15d64088873ab2bf38142b9ddf6ae2fc",
+      "git_blob_sha": "d924e85047ab8f81a9b4c694018388bb75d4e46c",
+      "width": 96,
+      "height": 96,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/platform/android/res/mipmap-xxhdpi/moroshka_launcher.png",
+      "bytes": 28192,
+      "sha256": "f4b704361d4ce9827f40833fd3a8dc26d49295dfe1bb5bd6851a35f27a6b4e72",
+      "git_blob_sha": "78e8a688abbcd1f98bad952480764911d9c0062e",
+      "width": 144,
+      "height": 144,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/platform/android/res/mipmap-xxxhdpi/moroshka_launcher.png",
+      "bytes": 46246,
+      "sha256": "17276c615360e7b92866b6dde36721865c985b18adc3e31dd79267397a850178",
+      "git_blob_sha": "dd29d5a8977747fa1c0c1dda4b9a20f2e35466ac",
+      "width": 192,
+      "height": 192,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/platform/android/validation.json",
+      "bytes": 1651,
+      "sha256": "b2f1a1040938046ec1b8ff31b90685e9b347a125535475afd6b130d056ba1c6b",
+      "git_blob_sha": "c7109d4a27de50db18f82147c091b32bfae21cca"
+    },
+    {
+      "path": "assets/platform/android/verify_template.py",
+      "bytes": 7410,
+      "sha256": "3411f6a9b5a42f2c60a082e0b559d4aa46a33543f897d29a93620eb68767f9b0",
+      "git_blob_sha": "70b057ce7781248f12e6d30a3a838d5d529990b2"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-landscape-landscape.jpg",
+      "bytes": 386654,
+      "sha256": "c10f642fb877a0ba9c30b47ca7d198cd62a81a067cfc735bc57c34a45f01ebbb",
+      "git_blob_sha": "5b6173da494142b737cb465ac683cd1bb3b52d8a",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-landscape-landscape.webp",
+      "bytes": 287602,
+      "sha256": "95d602d70a3952a14aa26195f4737b2b8ded856888683adeabf2b32aa52d7cdd",
+      "git_blob_sha": "4414d5749043779dfd2d51cd3a07970e860c377f",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-landscape-portrait.jpg",
+      "bytes": 366369,
+      "sha256": "4d50eadfd26e568434d5d81a9eafa7ef96689d3a709aee6ca4b1b6a5270c17c5",
+      "git_blob_sha": "0869c25394c22487b6abf3ff7fbabc47803076fb",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-landscape-portrait.webp",
+      "bytes": 270686,
+      "sha256": "521a4ec791e02f4b7dd7ff2cf3594fcd87b62dd37f6c008d4830290a76fde40f",
+      "git_blob_sha": "afdd2c27ea5efbbabb046b99d06206ccbc6fed1f",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-macro-landscape.jpg",
+      "bytes": 231911,
+      "sha256": "96870a9ab06b7433b1543239a2f1089fbf82916ecd9f9511fa732b5ce86f43af",
+      "git_blob_sha": "ef73c4e321c8b7cca117c2ea9737e835fa93d1ba",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-macro-landscape.webp",
+      "bytes": 146148,
+      "sha256": "a7aa828388c4c5798f85e94f26c4b2ef3411eaa7d7eb121b827cd7f86a910816",
+      "git_blob_sha": "6dcb7c12e288c9dfd28c6c5d2cb042614a5565ae",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-macro-portrait.jpg",
+      "bytes": 240316,
+      "sha256": "82923e518cde607256248412dcc2456dabcf525dc6589ed42a44033f0b096ec0",
+      "git_blob_sha": "7e465344eb3d8487b797b447752538252dec918f",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-macro-portrait.webp",
+      "bytes": 162014,
+      "sha256": "e1edb0a0139e0130ee5f390fa9cf4a590df6fd11bf87255e8b5d3b996a2ebee4",
+      "git_blob_sha": "d19af3928c7119af5b8a519d4867b69209c3b064",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/lake-sunset-landscape.jpg",
+      "bytes": 323567,
+      "sha256": "04af41e46f8afb905f2229cf399ad27c3def50b1c08c88a536060fb00a875965",
+      "git_blob_sha": "d186cadeff5c6a4a36bb96d6ce2802940fcd5967",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/lake-sunset-landscape.webp",
+      "bytes": 234680,
+      "sha256": "9f7949c3f5855270a46b62fe5bce375053a85664d4a58dcedf51c08a4f0f7067",
+      "git_blob_sha": "d456b4096190c657eb8bd7c4a388c2bb9521c4df",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/lake-sunset-portrait.jpg",
+      "bytes": 337720,
+      "sha256": "7b43c76837ceb864422026d99fc44080a2c089b03c3647f56afaa731ec098825",
+      "git_blob_sha": "b3a2d4b3ceeaa15e67a955ad6f84468027ba494c",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/lake-sunset-portrait.webp",
+      "bytes": 248858,
+      "sha256": "c1eba9d758518b610286ad1b296b83effd37dd63261f9a190fdf1e49d9204a6f",
+      "git_blob_sha": "b3dea96fc7d471e027b84e9d6e1c333ed2fe4744",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/mountain-dawn-landscape.jpg",
+      "bytes": 505109,
+      "sha256": "e95cf184ca3893a0f93b557dc5674e40f90a0d14949c9267fb90e4cb36b96a4b",
+      "git_blob_sha": "1649cc15bb82c40e81672489f1e98aabfee621f0",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/mountain-dawn-landscape.webp",
+      "bytes": 422422,
+      "sha256": "b2e78fb6e5555bc4eaf7df9e4bf69681407170de79d29d71640799fbab367d75",
+      "git_blob_sha": "e5bcef5ab02032fc9108437f5758bf1ba253bb77",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/mountain-dawn-portrait.jpg",
+      "bytes": 472433,
+      "sha256": "d501ec101539a4054729281666ae6f692c58ce309629c47151acda74951ded88",
+      "git_blob_sha": "e655371cc56db9dd594c48cccc872f743beef1f6",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/mountain-dawn-portrait.webp",
+      "bytes": 383708,
+      "sha256": "816d50bc38af170142798428360d4e03b89f7e56aaa64802f2b8b73eb3b9d402",
+      "git_blob_sha": "f4b5c4a7e1480d81a6271afc3a7bb00a2ad83e53",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/starry-night-landscape.jpg",
+      "bytes": 339975,
+      "sha256": "c15068b09d32cb1e9c71ee9ba0be572aa01f9143a17130e4d1561d51fa2120b2",
+      "git_blob_sha": "c7971a821b4f6c1baf1507aa29142330dd13eab2",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/starry-night-landscape.webp",
+      "bytes": 245114,
+      "sha256": "4ccd44960a5a8f7c292283787a1d82ee2e11b26370e16edb38f7b5333af2b2c5",
+      "git_blob_sha": "91a7f445ea7e0de7cc0bff26079d1e6542ecb227",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1600,
+      "height": 900,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/starry-night-portrait.jpg",
+      "bytes": 320134,
+      "sha256": "462e34593ba7ecc3686b1b2c5e1c989edcf955a8a1fadb787caa8888e9b8fd5c",
+      "git_blob_sha": "379bad7d338c3d30f7dc106387e50a998ee4d118",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/backgrounds/starry-night-portrait.webp",
+      "bytes": 219628,
+      "sha256": "d9696b031dae9db2d8325a9771ca1a83afd4a4e88b783da81540d5e60f31b9df",
+      "git_blob_sha": "f87aadebd3ff071e2108f54c5b037e2d1f67cd09",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 900,
+      "height": 1600,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-144.png",
+      "bytes": 31660,
+      "sha256": "e0a02064c735899f9d2f0e3fd990c2889b60c8b96f046d81ad39ec2cdabc84ee",
+      "git_blob_sha": "85782ffca39be0339bd5e8f109c2597698556fff",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 144,
+      "height": 144,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-192.png",
+      "bytes": 52112,
+      "sha256": "b3c3830e86d9c4420b37fb5b36c8e62f7a364693bd81269dab86dfa3c0e86fbc",
+      "git_blob_sha": "aac993c667904968796cf53734326243e5d2d53f",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 192,
+      "height": 192,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-3d.png",
+      "bytes": 1313808,
+      "sha256": "7046870d8e6e3042f535e8af0c8ddc5192212cb87884291be7c9a1056c9b9be3",
+      "git_blob_sha": "ba5b11e1afb43b82cdd0293ad2b66fe8c374661a",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-3d.webp",
+      "bytes": 905512,
+      "sha256": "7af2e4ae62b8fc0a7fcfec61cdbcef9eb5417aeb25fbaadfd4f20ff885cdb991",
+      "git_blob_sha": "223c63bfa0e2428d4d2e166efa40f4e4ead7a899",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-48.png",
+      "bytes": 4827,
+      "sha256": "df6f9b2de9634f1c07cd59954deddc163104a73dd45c4a2d1ff99380fa324970",
+      "git_blob_sha": "7713a098d6f4db239ea0046bac5f7fe2ad389f95",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 48,
+      "height": 48,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-512.png",
+      "bytes": 333459,
+      "sha256": "ccf1ea78e0378981a15d61f471a871c6d94f45246a0f57e5e559df8d1615bb5f",
+      "git_blob_sha": "d9c8cae28bccbf7348525f8180b78cb5c6e70ebe",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 512,
+      "height": 512,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-72.png",
+      "bytes": 9743,
+      "sha256": "051c2805ad44a564bd6813f706c93a459b70cea9fb28206ed1ddeaaa5798d20e",
+      "git_blob_sha": "4f8461623f940555f1c677122a2f7d404d626d4a",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 72,
+      "height": 72,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-96.png",
+      "bytes": 15989,
+      "sha256": "da3496b814250407beca6f436f2ddb10092ec88587ed79a99ddd4ebf6961f771",
+      "git_blob_sha": "71db34486a75dd9b0d46e2415aedfd979c90a20d",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/cloudberry-3d.png",
+      "bytes": 638024,
+      "sha256": "cf643f7b048307b0f4527dce189922df0d37ef7f959cb79f1e7cc4c3aa4fcf1e",
+      "git_blob_sha": "81d75cb729ff8ca94cf4026b6845c8da03943e30",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/cloudberry-3d.webp",
+      "bytes": 459678,
+      "sha256": "aeb0c1396a7f641d8cec38106de2d5da4996c8dfa41fcea649b0af4c0f636319",
+      "git_blob_sha": "a82e52f56f9d297acd3e8b6ecdd3c9edcd464ec3",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/cloudberry-sprig.png",
+      "bytes": 786489,
+      "sha256": "63212a946abf47eea881c22b45b536991c9de3956c8255966ff8615353608757",
+      "git_blob_sha": "0767910b2e2900f84012d26ca7578f836c5419ba",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/brand/cloudberry-sprig.webp",
+      "bytes": 562914,
+      "sha256": "4b0a2c963b898890692e752894b0c6f9f258ca2c9f0e997fad70e28be5de9067",
+      "git_blob_sha": "d2d16279c27ab455a8430981d950bb09ecdf1fbc",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/raster/export-map.json",
+      "bytes": 6465,
+      "sha256": "7114bc867e2752faeb84beef133d39422bb20af8e08d63f334ed6d63d31568ed",
+      "git_blob_sha": "3576fbe80305f89cc709a1b00eb0c575a3d52223"
+    },
+    {
+      "path": "assets/raster/illustrations/balance-stones.webp",
+      "bytes": 246116,
+      "sha256": "c130f1b7d1d2f69c1d498face7a80917108f2bf23b1716a6130810fa5413d63f",
+      "git_blob_sha": "c93a488de0e6f31a3ed681a2836e02c8dff01e4d",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1280,
+      "height": 720,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/illustrations/brain-glow.webp",
+      "bytes": 115216,
+      "sha256": "93a804d8893c7ca75c03996011d917d7a1b5771bf973e9db5a3dc4ed62bcfa56",
+      "git_blob_sha": "c3c01a27b7cc0800cae0beea68f80237ac2e5dba",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1280,
+      "height": 720,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/illustrations/idea-tree.webp",
+      "bytes": 252448,
+      "sha256": "925108d4bdec38bb59403fb7d4dd5b4b1af639a364b4d1e0cbabe5e6e545fe02",
+      "git_blob_sha": "c8a4355e8159c15020201e9aef8da6eea0d9ec32",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1280,
+      "height": 720,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/illustrations/knowledge-book.webp",
+      "bytes": 78134,
+      "sha256": "17f1101f8266362f63dbf3f696b8945e467e52e3a34652fbeca793b27188479a",
+      "git_blob_sha": "d5eaa17630c40967d09f4a0fd890c5ad5d26b464",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1280,
+      "height": 720,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/raster/illustrations/neural-network.webp",
+      "bytes": 125234,
+      "sha256": "a8ec1ff76f89895722b77f69d27a913345ce529d01f39abf9cc00eb94f3345fb",
+      "git_blob_sha": "fa5a066b7e5f169136ac787d1b19fd6f7fcc97fe",
+      "provenance": "technical-export-of-preserved-master",
+      "width": 1280,
+      "height": 720,
+      "mode": "RGB"
+    },
+    {
+      "path": "index.html",
+      "bytes": 52288,
+      "sha256": "f05903f224a1d872c447859378247cd20218898c52af4da1f77d16d9107ff04f",
+      "git_blob_sha": "d91420b2abcf8385f21eacd3ca87b702aa8ed154"
+    },
+    {
+      "path": "mockups/01.png",
+      "bytes": 1950388,
+      "sha256": "a15ed42998bc35a554adaea0fb8c9b1f6eae595c98d0d3ad005bb4cd6a896aa2",
+      "git_blob_sha": "049aaa04b154708129490686385816490df98140",
+      "provenance": "original-conversation-image",
+      "width": 1217,
+      "height": 1293,
+      "mode": "RGB"
+    },
+    {
+      "path": "mockups/02.png",
+      "bytes": 2046121,
+      "sha256": "2dcddad18c2bc5f532c8818d175ffc3a5729dcc07f549381713e28d83589ee63",
+      "git_blob_sha": "878dee7daa19cb3b8ea07d74eff61d02de79a5b8",
+      "provenance": "original-conversation-image",
+      "width": 1216,
+      "height": 1293,
+      "mode": "RGB"
+    },
+    {
+      "path": "mockups/03.png",
+      "bytes": 2046406,
+      "sha256": "c100ca8a71d4526a5ce851cd033cc732c7fb1bafbc415cb21ca7a58818e7cf34",
+      "git_blob_sha": "d83f516532c7c65b8bd0c6220e95cdeacd51c072",
+      "provenance": "original-conversation-image",
+      "width": 1199,
+      "height": 1312,
+      "mode": "RGB"
+    },
+    {
+      "path": "mockups/04-asset-board.png",
+      "bytes": 2142041,
+      "sha256": "dc5a9516eae54563f42b2b8f7c6af7265a8ed96d2d0a4c360cb8a96f8691ae33",
+      "git_blob_sha": "c7697f232cf4cabc7277fc6b4487d90c07ee35ab",
+      "provenance": "original-conversation-image",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "mockups/05-approved-reference.png",
+      "bytes": 452941,
+      "sha256": "d46758cc863a580c9ec5aed6877415d1579b3d02fc90961fa29292b15b4f0a01",
+      "git_blob_sha": "b126b09d8f0b80cc3b1216306300abbdf0329969",
+      "provenance": "original-conversation-image",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "mockups/sources.json",
+      "bytes": 1890,
+      "sha256": "59cab9a1e64ee0ecfa22c94910d055c11b9c860f58d939c792bbf1e05526a78e",
+      "git_blob_sha": "216bde233acfeba17e8d5d3b537c602708fb1987"
+    },
+    {
+      "path": "prototype.html",
+      "bytes": 6007,
+      "sha256": "c30d70ffeb8d6097eddbececaf8d674a9cf866ada3747f9cd712ffc015afb9cd",
+      "git_blob_sha": "5dc39149d278035e0cf7d584dc595b176ccc8180"
+    },
+    {
+      "path": "tokens.json",
+      "bytes": 596,
+      "sha256": "a17d5a7c3b9b72c59c5727c7f89924e380f525f7505f6a4612d6089c2177a7b3",
+      "git_blob_sha": "21cf917d4b5cd97b67bbd5f95eb3a32b67b57657"
+    },
+    {
+      "path": "tools/build_catalog.py",
+      "bytes": 15489,
+      "sha256": "6def1bd7356074cc92564b09c71ca3c2a974d609bf32462807aba1be734af3b6",
+      "git_blob_sha": "6a050b22ead8339259c5c7916c66600ee2457e87"
+    },
+    {
+      "path": "tools/build_manifest.py",
+      "bytes": 2614,
+      "sha256": "740847662b71d158c6aa19684051c390df3cf0935ea06264890be4189b37c77d",
+      "git_blob_sha": "7ab9e5bfc8f4480099677d532f79493688d2780f"
+    },
+    {
+      "path": "tools/export_assets.py",
+      "bytes": 4317,
+      "sha256": "24f5d4f93ae022c43edffb928c78a9812d70b4454a1b5c108d31ad0f960c82fd",
+      "git_blob_sha": "2dc632d98eb2b4344b4ce47d7639beed0a6f838d"
+    },
+    {
+      "path": "tools/validate_assets.py",
+      "bytes": 10549,
+      "sha256": "d55056568ff479098e32bb4d1054a758e5aa04d351cfcec3b66c365c46465115",
+      "git_blob_sha": "c396f9b27cd274f24219effb917ba657836ac175"
+    }
+  ]
+}

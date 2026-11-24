@@ -1,0 +1,453 @@
+{
+  "version": "2.2",
+  "items": [
+    {
+      "path": "assets/raster/backgrounds/cloudberry-landscape-landscape.webp",
+      "title": "Морошка, горы и озеро",
+      "kind": "backgrounds",
+      "detail": "16:9 · 1600×900",
+      "master": "assets/masters/backgrounds/cloudberry-landscape-landscape.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-landscape-portrait.webp",
+      "title": "Морошка, горы и озеро",
+      "kind": "backgrounds",
+      "detail": "9:16 · 900×1600",
+      "master": "assets/masters/backgrounds/cloudberry-landscape-portrait.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-macro-landscape.webp",
+      "title": "Крупный план морошки",
+      "kind": "backgrounds",
+      "detail": "16:9 · 1600×900",
+      "master": "assets/masters/backgrounds/cloudberry-macro-landscape.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/cloudberry-macro-portrait.webp",
+      "title": "Крупный план морошки",
+      "kind": "backgrounds",
+      "detail": "9:16 · 900×1600",
+      "master": "assets/masters/backgrounds/cloudberry-macro-portrait.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/lake-sunset-landscape.webp",
+      "title": "Озеро на закате",
+      "kind": "backgrounds",
+      "detail": "16:9 · 1600×900",
+      "master": "assets/masters/backgrounds/lake-sunset-landscape.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/lake-sunset-portrait.webp",
+      "title": "Озеро на закате",
+      "kind": "backgrounds",
+      "detail": "9:16 · 900×1600",
+      "master": "assets/masters/backgrounds/lake-sunset-portrait.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/mountain-dawn-landscape.webp",
+      "title": "Горный рассвет",
+      "kind": "backgrounds",
+      "detail": "16:9 · 1600×900",
+      "master": "assets/masters/backgrounds/mountain-dawn-landscape.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/mountain-dawn-portrait.webp",
+      "title": "Горный рассвет",
+      "kind": "backgrounds",
+      "detail": "9:16 · 900×1600",
+      "master": "assets/masters/backgrounds/mountain-dawn-portrait.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/starry-night-landscape.webp",
+      "title": "Звёздное небо",
+      "kind": "backgrounds",
+      "detail": "16:9 · 1600×900",
+      "master": "assets/masters/backgrounds/starry-night-landscape.png"
+    },
+    {
+      "path": "assets/raster/backgrounds/starry-night-portrait.webp",
+      "title": "Звёздное небо",
+      "kind": "backgrounds",
+      "detail": "9:16 · 900×1600",
+      "master": "assets/masters/backgrounds/starry-night-portrait.png"
+    },
+    {
+      "path": "assets/raster/illustrations/balance-stones.webp",
+      "title": "Равновесие",
+      "kind": "illustrations",
+      "detail": "1280×720 · WebP",
+      "master": "assets/masters/illustrations/balance-stones.png"
+    },
+    {
+      "path": "assets/raster/illustrations/brain-glow.webp",
+      "title": "Светящийся мозг",
+      "kind": "illustrations",
+      "detail": "1280×720 · WebP",
+      "master": "assets/masters/illustrations/brain-glow.png"
+    },
+    {
+      "path": "assets/raster/illustrations/idea-tree.webp",
+      "title": "Дерево на закате",
+      "kind": "illustrations",
+      "detail": "1280×720 · WebP",
+      "master": "assets/masters/illustrations/idea-tree.png"
+    },
+    {
+      "path": "assets/raster/illustrations/knowledge-book.webp",
+      "title": "Раскрытая книга",
+      "kind": "illustrations",
+      "detail": "1280×720 · WebP",
+      "master": "assets/masters/illustrations/knowledge-book.png"
+    },
+    {
+      "path": "assets/raster/illustrations/neural-network.webp",
+      "title": "Нейронная сеть",
+      "kind": "illustrations",
+      "detail": "1280×720 · WebP",
+      "master": "assets/masters/illustrations/neural-network.png"
+    },
+    {
+      "path": "assets/raster/brand/cloudberry-3d.png",
+      "title": "Объёмная морошка",
+      "kind": "brand",
+      "detail": "PNG · прозрачность",
+      "master": "assets/masters/brand/cloudberry-3d.png"
+    },
+    {
+      "path": "assets/raster/brand/cloudberry-sprig.png",
+      "title": "Веточка морошки",
+      "kind": "brand",
+      "detail": "PNG · прозрачность",
+      "master": "assets/masters/brand/cloudberry-sprig.png"
+    },
+    {
+      "path": "assets/raster/brand/app-icon-3d.png",
+      "title": "Иконка приложения",
+      "kind": "brand",
+      "detail": "PNG · квадрат",
+      "master": "assets/masters/brand/app-icon-3d.png"
+    },
+    {
+      "path": "assets/brand/cloudberry-mono-orange.svg",
+      "title": "cloudberry-mono-orange",
+      "kind": "brand",
+      "detail": "Редактируемый SVG",
+      "master": null
+    },
+    {
+      "path": "assets/brand/cloudberry-mono-plum.svg",
+      "title": "cloudberry-mono-plum",
+      "kind": "brand",
+      "detail": "Редактируемый SVG",
+      "master": null
+    },
+    {
+      "path": "assets/brand/wordmark-orange.svg",
+      "title": "wordmark-orange",
+      "kind": "brand",
+      "detail": "Редактируемый SVG",
+      "master": null
+    },
+    {
+      "path": "assets/brand/wordmark-plum.svg",
+      "title": "wordmark-plum",
+      "kind": "brand",
+      "detail": "Редактируемый SVG",
+      "master": null
+    },
+    {
+      "path": "assets/icons/attachment.svg",
+      "title": "attachment",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/attachment.png"
+    },
+    {
+      "path": "assets/icons/back.svg",
+      "title": "back",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/back.png"
+    },
+    {
+      "path": "assets/icons/bell.svg",
+      "title": "bell",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/bell.png"
+    },
+    {
+      "path": "assets/icons/brain.svg",
+      "title": "brain",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/brain.png"
+    },
+    {
+      "path": "assets/icons/calendar.svg",
+      "title": "calendar",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/calendar.png"
+    },
+    {
+      "path": "assets/icons/check.svg",
+      "title": "check",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/check.png"
+    },
+    {
+      "path": "assets/icons/checkbox.svg",
+      "title": "checkbox",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/checkbox.png"
+    },
+    {
+      "path": "assets/icons/close.svg",
+      "title": "close",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/close.png"
+    },
+    {
+      "path": "assets/icons/edit.svg",
+      "title": "edit",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/edit.png"
+    },
+    {
+      "path": "assets/icons/folder.svg",
+      "title": "folder",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/folder.png"
+    },
+    {
+      "path": "assets/icons/graph.svg",
+      "title": "graph",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/graph.png"
+    },
+    {
+      "path": "assets/icons/heart.svg",
+      "title": "heart",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/heart.png"
+    },
+    {
+      "path": "assets/icons/home.svg",
+      "title": "home",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/home.png"
+    },
+    {
+      "path": "assets/icons/image.svg",
+      "title": "image",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/image.png"
+    },
+    {
+      "path": "assets/icons/layers.svg",
+      "title": "layers",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/layers.png"
+    },
+    {
+      "path": "assets/icons/library.svg",
+      "title": "library",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/library.png"
+    },
+    {
+      "path": "assets/icons/lightning.svg",
+      "title": "lightning",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/lightning.png"
+    },
+    {
+      "path": "assets/icons/link.svg",
+      "title": "link",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/link.png"
+    },
+    {
+      "path": "assets/icons/mic.svg",
+      "title": "mic",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/mic.png"
+    },
+    {
+      "path": "assets/icons/moon.svg",
+      "title": "moon",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/moon.png"
+    },
+    {
+      "path": "assets/icons/more.svg",
+      "title": "more",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/more.png"
+    },
+    {
+      "path": "assets/icons/note.svg",
+      "title": "note",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/note.png"
+    },
+    {
+      "path": "assets/icons/paperclip.svg",
+      "title": "paperclip",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/paperclip.png"
+    },
+    {
+      "path": "assets/icons/pause.svg",
+      "title": "pause",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/pause.png"
+    },
+    {
+      "path": "assets/icons/play.svg",
+      "title": "play",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/play.png"
+    },
+    {
+      "path": "assets/icons/plus.svg",
+      "title": "plus",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/plus.png"
+    },
+    {
+      "path": "assets/icons/save.svg",
+      "title": "save",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/save.png"
+    },
+    {
+      "path": "assets/icons/search.svg",
+      "title": "search",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/search.png"
+    },
+    {
+      "path": "assets/icons/send.svg",
+      "title": "send",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/send.png"
+    },
+    {
+      "path": "assets/icons/settings.svg",
+      "title": "settings",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/settings.png"
+    },
+    {
+      "path": "assets/icons/sparkles.svg",
+      "title": "sparkles",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/sparkles.png"
+    },
+    {
+      "path": "assets/icons/stop.svg",
+      "title": "stop",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/stop.png"
+    },
+    {
+      "path": "assets/icons/stopwatch.svg",
+      "title": "stopwatch",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/stopwatch.png"
+    },
+    {
+      "path": "assets/icons/sun.svg",
+      "title": "sun",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/sun.png"
+    },
+    {
+      "path": "assets/icons/tag.svg",
+      "title": "tag",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/tag.png"
+    },
+    {
+      "path": "assets/icons/user.svg",
+      "title": "user",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/user.png"
+    },
+    {
+      "path": "assets/icons/waveform.svg",
+      "title": "waveform",
+      "kind": "icons",
+      "detail": "24×24 · currentColor",
+      "master": "assets/icons-png/waveform.png"
+    },
+    {
+      "path": "mockups/01.png",
+      "title": "Первоначальная концепция",
+      "kind": "mockups",
+      "detail": "Оригинал без изменений",
+      "master": null
+    },
+    {
+      "path": "mockups/02.png",
+      "title": "Гибридная концепция",
+      "kind": "mockups",
+      "detail": "Оригинал без изменений",
+      "master": null
+    },
+    {
+      "path": "mockups/03.png",
+      "title": "Полировка экранов",
+      "kind": "mockups",
+      "detail": "Оригинал без изменений",
+      "master": null
+    },
+    {
+      "path": "mockups/04-asset-board.png",
+      "title": "Исходный планшет",
+      "kind": "mockups",
+      "detail": "Оригинал без изменений",
+      "master": null
+    },
+    {
+      "path": "mockups/05-approved-reference.png",
+      "title": "Референс пользователя",
+      "kind": "mockups",
+      "detail": "Оригинал без изменений",
+      "master": null
+    }
+  ]
+}

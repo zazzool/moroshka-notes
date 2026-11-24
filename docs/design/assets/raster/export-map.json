@@ -1,0 +1,270 @@
+{
+  "derivations": [
+    {
+      "master": "assets/masters/backgrounds/cloudberry-landscape-landscape.png",
+      "exports": [
+        "assets/raster/backgrounds/cloudberry-landscape-landscape.webp",
+        "assets/raster/backgrounds/cloudberry-landscape-landscape.jpg"
+      ],
+      "size": [
+        1600,
+        900
+      ],
+      "source_crop_box": [
+        0.0,
+        0.29,
+        1672.0,
+        940.79
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/cloudberry-landscape-portrait.png",
+      "exports": [
+        "assets/raster/backgrounds/cloudberry-landscape-portrait.webp",
+        "assets/raster/backgrounds/cloudberry-landscape-portrait.jpg"
+      ],
+      "size": [
+        900,
+        1600
+      ],
+      "source_crop_box": [
+        93.0144,
+        0.0,
+        931.7019,
+        1491.0
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/cloudberry-macro-landscape.png",
+      "exports": [
+        "assets/raster/backgrounds/cloudberry-macro-landscape.webp",
+        "assets/raster/backgrounds/cloudberry-macro-landscape.jpg"
+      ],
+      "size": [
+        1600,
+        900
+      ],
+      "source_crop_box": [
+        0.0,
+        0.29,
+        1672.0,
+        940.79
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/cloudberry-macro-portrait.png",
+      "exports": [
+        "assets/raster/backgrounds/cloudberry-macro-portrait.webp",
+        "assets/raster/backgrounds/cloudberry-macro-portrait.jpg"
+      ],
+      "size": [
+        900,
+        1600
+      ],
+      "source_crop_box": [
+        0.25,
+        0.0,
+        940.75,
+        1672.0
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/lake-sunset-landscape.png",
+      "exports": [
+        "assets/raster/backgrounds/lake-sunset-landscape.webp",
+        "assets/raster/backgrounds/lake-sunset-landscape.jpg"
+      ],
+      "size": [
+        1600,
+        900
+      ],
+      "source_crop_box": [
+        0.0,
+        0.25,
+        1672.0,
+        940.75
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/lake-sunset-portrait.png",
+      "exports": [
+        "assets/raster/backgrounds/lake-sunset-portrait.webp",
+        "assets/raster/backgrounds/lake-sunset-portrait.jpg"
+      ],
+      "size": [
+        900,
+        1600
+      ],
+      "source_crop_box": [
+        116.3125,
+        0.0,
+        947.6875,
+        1478.0
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/mountain-dawn-landscape.png",
+      "exports": [
+        "assets/raster/backgrounds/mountain-dawn-landscape.webp",
+        "assets/raster/backgrounds/mountain-dawn-landscape.jpg"
+      ],
+      "size": [
+        1600,
+        900
+      ],
+      "source_crop_box": [
+        0.0,
+        0.275,
+        1672.0,
+        940.775
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/mountain-dawn-portrait.png",
+      "exports": [
+        "assets/raster/backgrounds/mountain-dawn-portrait.webp",
+        "assets/raster/backgrounds/mountain-dawn-portrait.jpg"
+      ],
+      "size": [
+        900,
+        1600
+      ],
+      "source_crop_box": [
+        116.3125,
+        0.0,
+        947.6875,
+        1478.0
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/starry-night-landscape.png",
+      "exports": [
+        "assets/raster/backgrounds/starry-night-landscape.webp",
+        "assets/raster/backgrounds/starry-night-landscape.jpg"
+      ],
+      "size": [
+        1600,
+        900
+      ],
+      "source_crop_box": [
+        0.0,
+        0.24,
+        1672.0,
+        940.74
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/backgrounds/starry-night-portrait.png",
+      "exports": [
+        "assets/raster/backgrounds/starry-night-portrait.webp",
+        "assets/raster/backgrounds/starry-night-portrait.jpg"
+      ],
+      "size": [
+        900,
+        1600
+      ],
+      "source_crop_box": [
+        193.3575,
+        0.0,
+        981.9825,
+        1402.0
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/illustrations/balance-stones.png",
+      "exports": [
+        "assets/raster/illustrations/balance-stones.webp"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "source_crop_box": [
+        0.0,
+        0.25,
+        1672.0,
+        940.75
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/illustrations/brain-glow.png",
+      "exports": [
+        "assets/raster/illustrations/brain-glow.webp"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "source_crop_box": [
+        0.0,
+        0.25,
+        1672.0,
+        940.75
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/illustrations/idea-tree.png",
+      "exports": [
+        "assets/raster/illustrations/idea-tree.webp"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "source_crop_box": [
+        0.0,
+        0.25,
+        1672.0,
+        940.75
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/illustrations/knowledge-book.png",
+      "exports": [
+        "assets/raster/illustrations/knowledge-book.webp"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "source_crop_box": [
+        0.0,
+        0.25,
+        1672.0,
+        940.75
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    },
+    {
+      "master": "assets/masters/illustrations/neural-network.png",
+      "exports": [
+        "assets/raster/illustrations/neural-network.webp"
+      ],
+      "size": [
+        1280,
+        720
+      ],
+      "source_crop_box": [
+        0.0,
+        0.25,
+        1672.0,
+        940.75
+      ],
+      "operation": "cover-crop-and-resample; no-stretch"
+    }
+  ],
+  "note": "PNG masters remain intact; crop boxes are recorded in original pixel coordinates."
+}
