@@ -172,6 +172,57 @@ def auto_sync_check(origin, browser):
     ctx.close()
 
 
+def incremental_check(origin, browser):
+    import uuid
+    ctx = browser.new_context(service_workers="block")
+    headers = {"Authorization": "Bearer " + KEY}
+    id1, id2 = str(uuid.uuid4()), str(uuid.uuid4())
+    old = "# Инкрементальный тест\n\n" + "я" * 8000
+    untouched = "# Неизменная заметка\n\n" + "б" * 8000
+    for note_id, text in ((id1, old), (id2, untouched)):
+        res = ctx.request.put(origin + "/api/notes/" + note_id, headers=headers,
+                              data={"text": text, "base": None})
+        assert res.status == 200
+    page = ctx.new_page()
+    page.goto(origin)
+    connect(page)
+    calls = []
+    def observe(req):
+        path = req.url.split(origin, 1)[-1]
+        if path.startswith("/api/sync/") or path.startswith("/api/notes"):
+            calls.append((req.method, path, req.post_data_json if req.method == "POST" else None))
+    page.on("request", observe)
+    def sync():
+        page.locator("#sync").click()
+        expect(page.locator("#status")).to_have_text("Синхронизировано", timeout=20000)
+    sync()
+    assert calls == [("GET", "/api/sync/manifest", None)], calls
+    current = ctx.request.get(origin + "/api/sync/manifest", headers=headers).json()
+    revision = next(n["revision"] for n in current["notes"] if n["id"] == id1)
+    updated = "# Инкрементальный тест\n\nИзменение сервера"
+    reply = ctx.request.put(origin + "/api/notes/" + id1, headers=headers,
+                            data={"text": updated, "base": revision})
+    assert reply.status == 200
+    calls.clear()
+    sync()
+    assert calls == [("GET", "/api/sync/manifest", None),
+                     ("POST", "/api/sync/read", {"notes": [{"id": id1, "revision": reply.json()["revision"]}]})], calls
+    page.locator("#items .note").filter(has_text="Изменение сервера").click()
+    expect(page.get_by_label("Markdown")).to_have_value(updated)
+    page.get_by_label("Markdown").fill("# Инкрементальный тест\n\nЛокальная редакция")
+    page.get_by_role("button", name="Закрыть редактор").click()
+    calls.clear()
+    sync()
+    assert calls == [("GET", "/api/sync/manifest", None), ("PUT", "/api/notes/" + id1, None)], calls
+    # A 404 specifically on the capability endpoint is the legacy compatibility path.
+    page.route("**/api/sync/manifest", lambda route: route.fulfill(
+        status=404, content_type="application/json", body='{"error":"Not found"}'))
+    calls.clear()
+    sync()
+    assert calls == [("GET", "/api/sync/manifest", None), ("GET", "/api/notes", None)], calls
+    ctx.close()
+
+
 def check(origin):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
@@ -255,6 +306,7 @@ def check(origin):
         expect(desktop.locator("#status")).to_have_text("Синхронизировано", timeout=10000)
         history_check(origin, browser)
         auto_sync_check(origin, browser)
+        incremental_check(origin, browser)
         browser.close()
 
 
@@ -272,7 +324,7 @@ if __name__ == "__main__":
         try:
             port = int(proc.stdout.readline())
             check(f"http://127.0.0.1:{port}")
-            print("Browser check passed: links, tasks, two devices, concurrent edits, offline reload.")
+            print("Browser check passed: links, tasks, offline storage, backups, history, automatic and incremental sync.")
         finally:
             proc.terminate()
             proc.wait()
