@@ -1,0 +1,41 @@
+name: Publish alpha 8 test APK
+on:
+  push:
+    branches: [delivery/alpha8-debug-apk]
+    paths: [.github/workflows/deliver-alpha8-debug.yml]
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: deliver-alpha8-debug
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: zazzool/moroshka-notes
+    steps:
+      - name: Download existing tested build
+        run: |
+          set -euo pipefail
+          gh run download 45428413096 --name moroshka-alpha-build-test-only --dir candidate
+          test -s candidate/app-debug.apk
+      - name: Verify signed APK and publish separate test prerelease
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose --print-certs candidate/app-debug.apk
+          info=$("$tools/aapt" dump badging candidate/app-debug.apk | sed -n '/^package:/p')
+          [[ "$info" == *"name='app.moroshka.notes.debug'"* ]]
+          [[ "$info" == *"versionCode='8'"* ]]
+          [[ "$info" == *"versionName='0.1.0-alpha.8'"* ]]
+          mkdir release
+          cp candidate/app-debug.apk release/Moroshka-Notes-0.1.0-alpha.8-debug.apk
+          (cd release && sha256sum *.apk > SHA256SUMS)
+          cat > notes.md <<'NOTES'
+          Тестовая сборка Android 8+ с новым дизайном Морошки. Исходный код: e45a37cac7d74bf29cbef828a5225d9cac836a67.
+          
+          Это исходный подписанный debug APK из успешной сборки GitHub Actions 45428413096. Подпись отличается от оригинальной alpha 7 либо совместимость не подтверждена. Не удаляйте предыдущую версию без резервной копии заметок. Это отдельный предварительный выпуск для проверки интерфейса, не штатное обновление.
+          NOTES
+          gh release create v0.1.0-alpha.8-debug release/Moroshka-Notes-0.1.0-alpha.8-debug.apk release/SHA256SUMS --target e45a37cac7d74bf29cbef828a5225d9cac836a67 --title "Moroshka Notes alpha 8 — test APK" --notes-file notes.md --prerelease --latest=false
