@@ -207,6 +207,24 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         }
         root.addView(nav, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+        // Give the editor and save action room when the soft keyboard resizes the window.
+        val layoutListener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            val visible = android.graphics.Rect()
+            root.getWindowVisibleDisplayFrame(visible)
+            @Suppress("DEPRECATION")
+            val screenHeight = android.util.DisplayMetrics().also { windowManager.defaultDisplay.getRealMetrics(it) }.heightPixels
+            val keyboardOpen = !isInMultiWindowMode && screenHeight - visible.bottom > dp(160)
+            val visibility = if (keyboardOpen) View.GONE else View.VISIBLE
+            if (nav.visibility != visibility) nav.visibility = visibility
+        }
+        val observer = nav.viewTreeObserver
+        observer.addOnGlobalLayoutListener(layoutListener)
+        nav.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = Unit
+            override fun onViewDetachedFromWindow(v: View) {
+                if (observer.isAlive) observer.removeOnGlobalLayoutListener(layoutListener)
+            }
+        })
     }
 
     private fun section(container: LinearLayout, title: String) {
