@@ -23,6 +23,7 @@ class DocumentBackup(private val context: Context) {
         // Read before writing anything, so existing documents are never silently replaced.
         val stored = versions(uri)
         val removed = removedItems(uri)
+        restorePhotos(uri, vault.photos)
         for ((id, value) in removed) {
             vault.restoreDeleted(Note(id, value.getString("text")))
         }
@@ -93,6 +94,42 @@ class DocumentBackup(private val context: Context) {
         }
         return result
     }
+    private fun photoDocuments(uri:Uri):Map<String,Uri>{
+        val children=DocumentsContract.buildChildDocumentsUriUsingTree(uri,DocumentsContract.getTreeDocumentId(uri))
+        val result=linkedMapOf<String,Uri>()
+        val pattern=Regex("moroshka-media-([0-9a-f]{64})\\.jpg")
+        requireNotNull(resolver.query(children,arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME,DocumentsContract.Document.COLUMN_DOCUMENT_ID),null,null,null)).use{cursor->
+            while(cursor.moveToNext()){
+                val id=pattern.matchEntire(cursor.getString(0)?:"")?.groupValues?.get(1)?:continue
+                result[id]=DocumentsContract.buildDocumentUriUsingTree(uri,cursor.getString(1))
+            }
+        }
+        return result
+    }
+    private fun restorePhotos(uri:Uri,photos:PhotoStore){
+        for((id,doc) in photoDocuments(uri)){
+            val data=requireNotNull(resolver.openInputStream(doc)).use{PhotoStore.bounded(it,PhotoStore.maxBytes)}
+            photos.save(data,id)
+        }
+    }
+    private fun savePhotos(uri:Uri,text:String){
+        val refs=PhotoStore.refs(text)
+        if(refs.isEmpty())return
+        val photos=PhotoStore(context)
+        val existing=photoDocuments(uri)
+        val root=DocumentsContract.buildDocumentUriUsingTree(uri,DocumentsContract.getTreeDocumentId(uri))
+        for(id in refs){
+            val data=requireNotNull(photos.read(id)){"В папке не сохранена фотография"}
+            val old=existing[id]
+            if(old!=null){
+                val previous=requireNotNull(resolver.openInputStream(old)).use{PhotoStore.bounded(it,PhotoStore.maxBytes)}
+                PhotoStore.verify(id,previous)
+                continue
+            }
+            val doc=requireNotNull(DocumentsContract.createDocument(resolver,root,"image/jpeg","moroshka-media-"+id+".jpg"))
+            requireNotNull(resolver.openOutputStream(doc,"w")).use{it.write(data);it.flush()}
+        }
+    }
     fun clearDeletion(id: String) {
         if (!configured) return
         val uri = tree()
@@ -118,6 +155,7 @@ class DocumentBackup(private val context: Context) {
     fun save(note: Note) {
         if (!configured) return
         val uri = tree()
+        savePhotos(uri,note.text)
         val bytes = note.text.toByteArray(Charsets.UTF_8)
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         val root = DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri))

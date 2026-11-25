@@ -19,6 +19,7 @@ class Vault(context: Context) {
     private val history = RevisionStore(File(context.filesDir, "history"))
     data class SavedVersion(val revision: String, val archivedAt: Long)
     data class TrashEntry(val name: String, val title: String, val modifiedAt: Long)
+    internal val photos = PhotoStore(context)
     private val backup = DocumentBackup(context)
     private val dir = File(context.filesDir, "vault").apply { mkdirs() }
     private val trash = File(context.filesDir, "trash").apply { mkdirs() }
@@ -35,7 +36,8 @@ class Vault(context: Context) {
             .filter { it.endsWith(".md") && validId.matches(it.removeSuffix(".md")) }
             .distinct().map { read(it.removeSuffix(".md")) }.sortedBy { it.title.lowercase() }
     }
-    fun recent(): List<Note> = all().sortedByDescending { File(dir, it.id + ".md").lastModified() }
+    fun modifiedAt(id:String):Long = file(id).baseFile.lastModified()
+    fun recent(): List<Note> = all().sortedByDescending { modifiedAt(it.id) }
     fun create(text: String, withBackup: Boolean = true) = save(Note(UUID.randomUUID().toString(), text), withBackup)
     fun save(note: Note, withBackup: Boolean = true): Note = synchronized(writeLock) {
         val bytes = note.text.toByteArray(Charsets.UTF_8)
@@ -77,7 +79,9 @@ class Vault(context: Context) {
 
     /** Add-only import; previously deleted IDs are not reused. Retrying is safe. */
     fun restoreArchive(bytes: ByteArray): BackupArchive.Result = synchronized(writeLock) {
-        restoreEntries(BackupArchive.decode(bytes), true)
+        val bundle = BackupArchive.decodeBundle(bytes)
+        for ((id,data) in bundle.images) photos.save(data,id)
+        restoreEntries(bundle.notes, true)
     }
 
     /** External folders are archival evidence, not instructions to delete live notes. */
@@ -206,6 +210,11 @@ class Vault(context: Context) {
         }
         val snapshot = SyncPull.snapshot(::api, known, ::checkpoint)
         val list = snapshot.getJSONArray("notes")
+        // Never apply a remote photo note before its immutable images have been stored.
+        for (i in 0 until list.length()) {
+            val row = list.getJSONObject(i)
+            if (row.has("text")) photos.pull(row.getString("text"),::api,::checkpoint)
+        }
         val remote = (0 until list.length()).map { list.getJSONObject(it) }.associateBy { it.getString("id") }.toMutableMap()
         var conflicts = 0
         val deleted = snapshot.optJSONArray("deleted") ?: org.json.JSONArray()
@@ -264,6 +273,7 @@ class Vault(context: Context) {
             }
             // Missing UUID without a tombstone can mean server rollback or migration.
             // A null base is a conditional create, never an unconditional overwrite.
+            photos.push(note.text,::api,::checkpoint)
             val result = api("/api/notes/" + note.id, JSONObject().put("text", note.text)
                 .put("base", if (other == null) JSONObject.NULL else base ?: JSONObject.NULL))
             local { mark(note.id, result.getString("revision")) }

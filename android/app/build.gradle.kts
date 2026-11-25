@@ -38,6 +38,7 @@ android {
 
 dependencies {
     implementation("com.github.mwiede:jsch:2.28.2")
+    implementation("androidx.core:core:1.15.0")
 }
 
 val prepareServer by tasks.registering(Sync::class) {
