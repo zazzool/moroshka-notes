@@ -1,4 +1,6 @@
-// Portable backup v1. No connection keys, revisions or browser-specific metadata.
+// Portable backup v1/v2. No connection keys, revisions or browser-specific metadata.
+import {imageRefs} from './media-format.mjs'
+import {fromBase64,toBase64,verifyImage} from './media-store.mjs'
 export const maxArchiveBytes = 32 * 1024 * 1024
 const maxNoteBytes = 512 * 1024
 const maxNotes = 10000
@@ -16,7 +18,7 @@ function validate(note, ids) {
   requireValue(typeof note.text === 'string' && encoder.encode(note.text).length <= maxNoteBytes, 'Некорректный текст или размер заметки в архиве')
   ids.add(note.id)
 }
-export async function encodeArchive(notes) {
+export async function encodeArchive(notes,readImage=null) {
   const input = [...notes]
   requireValue(input.length <= maxNotes, 'В архиве не более 10 000 заметок')
   const ids = new Set(), output = []
@@ -24,16 +26,28 @@ export async function encodeArchive(notes) {
     validate(n, ids)
     output.push({id:n.id, text:n.text, sha256:await digest(n.text)})
   }
-  const bytes = encoder.encode(JSON.stringify({format, version:1, notes:output}))
+  const refs=[...new Set(output.flatMap(n=>imageRefs(n.text)))]
+  const images=[]
+  let imageLength=0
+  for(const id of refs){
+    const bytes=readImage&&await readImage(id)
+    requireValue(bytes,'В архиве отсутствует изображение '+id.slice(0,12))
+    await verifyImage(id,bytes)
+    const data=toBase64(bytes)
+    imageLength+=data.length
+    requireValue(imageLength<=maxArchiveBytes,'Архив больше 32 МиБ')
+    images.push({id,data})
+  }
+  const bytes = encoder.encode(JSON.stringify({format, version:images.length?2:1, notes:output,...(images.length?{images}:{})}))
   requireValue(bytes.length <= maxArchiveBytes, 'Архив больше 32 МиБ')
   return bytes
 }
-export async function decodeArchive(bytes) {
+export async function decodeArchiveBundle(bytes) {
   requireValue(bytes.byteLength <= maxArchiveBytes, 'Архив больше 32 МиБ')
   let data
   try { data = JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(bytes)) }
   catch { throw Error('Повреждённый JSON или кодировка архива') }
-  requireValue(data?.format === format && data.version === 1 && Array.isArray(data.notes), 'Неподдерживаемый формат архива Морошки')
+  requireValue(data?.format === format && [1,2].includes(data.version) && Array.isArray(data.notes), 'Неподдерживаемый формат архива Морошки')
   requireValue(data.notes.length <= maxNotes, 'В архиве не более 10 000 заметок')
   const ids = new Set(), verified = []
   for (const n of data.notes) {
@@ -41,8 +55,17 @@ export async function decodeArchive(bytes) {
     requireValue(n.sha256 === await digest(n.text), 'Контрольная сумма заметки не совпадает: ' + n.id)
     verified.push({id:n.id, text:n.text, sha256:n.sha256})
   }
-  return verified
+  const refs=new Set(verified.flatMap(n=>imageRefs(n.text)))
+  const images=new Map()
+  requireValue(data.version===1||Array.isArray(data.images),'В архиве нет изображений')
+  for(const item of data.version===2?data.images:[]){
+    requireValue(item&&refs.has(item.id)&&!images.has(item.id),'Лишнее или повторное изображение в архиве')
+    images.set(item.id,await verifyImage(item.id,fromBase64(item.data)))
+  }
+  requireValue(images.size===refs.size,'В архиве отсутствует изображение')
+  return {notes:verified,images}
 }
+export async function decodeArchive(bytes){return (await decodeArchiveBundle(bytes)).notes}
 async function conflictId(note, attempt) {
   const h = await digest('moroshka-backup-v1\n' + note.id + '\n' + note.sha256 + '\n' + attempt)
   return h.slice(0,8)+'-'+h.slice(8,12)+'-8'+h.slice(13,16)+'-8'+h.slice(17,20)+'-'+h.slice(20,32)

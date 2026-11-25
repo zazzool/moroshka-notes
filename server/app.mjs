@@ -14,6 +14,7 @@ const assets = new Map([
   ['/knowledge.mjs', ['knowledge.mjs', 'text/javascript']],
   ['/markdown.mjs', ['markdown.mjs', 'text/javascript']],
   ['/media-format.mjs', ['media-format.mjs', 'text/javascript']],
+  ['/media-store.mjs', ['media-store.mjs', 'text/javascript']],
   ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
   ['/assets/cloudberry.webp', ['assets/cloudberry.webp', 'image/webp']],
   ['/assets/hero-day.webp', ['assets/hero-day.webp', 'image/webp']],
