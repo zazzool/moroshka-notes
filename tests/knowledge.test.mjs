@@ -4,6 +4,7 @@ import { mkdtempSync,rmSync,readFileSync,writeFileSync,existsSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { request as httpRequest } from 'node:http'
 import { application } from '../server/app.mjs'
 import { digest } from '../server/vault.mjs'
 import { applyProposal,appendLink } from '../web/knowledge.mjs'
@@ -24,9 +25,25 @@ async function fixture(t){
   await new Promise(r=>server.listen(0,'127.0.0.1',r))
   t.after(async()=>{await new Promise(r=>server.close(r));rmSync(dir,{recursive:true,force:true})})
   const origin='http://127.0.0.1:'+server.address().port
-  const api=(path,method='GET',body,key=token,headers={})=>fetch(origin+path,{method,
-    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json',...(path==='/mcp'?{Host:'notes.example.org'}:{}),...headers},
-    body:body===undefined?undefined:JSON.stringify(body)})
+  const api=(path,method='GET',body,key=token,headers={})=>{
+    const data=body===undefined?undefined:JSON.stringify(body)
+    if(path!=='/mcp')return fetch(origin+path,{method,headers:{Authorization:'Bearer '+key,'Content-Type':'application/json',...headers},body:data})
+    // Native HTTP request preserves the exact authority under test; fetch may
+    // normalize Host to the local fixture URL.
+    return new Promise((resolve,reject)=>{
+      const req=httpRequest(origin+path,{method,headers:{Authorization:'Bearer '+key,
+        'Content-Type':'application/json',Host:'notes.example.org',...headers,
+        ...(data===undefined?{}:{'Content-Length':Buffer.byteLength(data)})}},res=>{
+        const chunks=[]
+        res.on('data',chunk=>chunks.push(chunk))
+        res.on('error',reject)
+        res.on('end',()=>resolve(new Response(res.statusCode===202||res.statusCode===204?null:Buffer.concat(chunks),
+          {status:res.statusCode,headers:res.headers})))
+      })
+      req.on('error',reject)
+      req.end(data)
+    })
+  }
   async function add(text,id=randomUUID(),base=null){
     const res=await api('/api/notes/'+id,'PUT',{text,base});assert.equal(res.status,200);return res.json()
   }
