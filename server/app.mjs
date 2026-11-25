@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
 import { intelligence } from './intelligence.mjs'
 import { mcpResponse } from './mcp.mjs'
+import { openMedia } from './media.mjs'
 
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']], ['/app.js', ['app.js', 'text/javascript']],
@@ -12,6 +13,7 @@ const assets = new Map([
   ['/sync-pull.mjs', ['sync-pull.mjs', 'text/javascript']],
   ['/knowledge.mjs', ['knowledge.mjs', 'text/javascript']],
   ['/markdown.mjs', ['markdown.mjs', 'text/javascript']],
+  ['/media-format.mjs', ['media-format.mjs', 'text/javascript']],
   ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
   ['/assets/cloudberry.webp', ['assets/cloudberry.webp', 'image/webp']],
   ['/assets/hero-day.webp', ['assets/hero-day.webp', 'image/webp']],
@@ -49,12 +51,13 @@ async function payload(req) {
   throw new ApiError(400, 'Ожидается JSON')
 }
 export function application(options, request = fetch) {
-  const { token, actionsToken, mcpToken, dir, openrouterKey, model, embeddingModel, publicUrl } = options
+  const { token, actionsToken, mcpToken, dir, openrouterKey, model, embeddingModel, visionModel, publicUrl } = options
   if (!token || token.length < 24) throw Error('Задайте MOROSHKA_TOKEN длиной от 24 символов')
   if (actionsToken && (actionsToken.length < 24 || token === actionsToken)) throw Error('Нужен отдельный ключ для ChatGPT Actions длиной от 24 символов')
   if (mcpToken && (mcpToken.length < 24 || mcpToken === token || mcpToken === actionsToken)) throw Error('Нужен отдельный MCP_TOKEN длиной от 24 символов')
   const vault = openVault(dir)
-  const ai = intelligence({vault,dir,key:openrouterKey,model,embeddingModel,request})
+  const media = openMedia(dir)
+  const ai = intelligence({vault,dir,key:openrouterKey,model,embeddingModel,visionModel,media,request})
   // Pairing requests are short-lived and live only in this process.
   const pairing = new Map()
   function cleanPairing() {
@@ -165,6 +168,19 @@ export function application(options, request = fetch) {
         }
       } else if (pathname.startsWith('/api/')) {
         requireKey(req, token)
+        if (req.method === 'POST' && pathname === '/api/media/missing') {
+          const {ids}=await payload(req)
+          return json(res,200,{missing:media.missing(ids)})
+        }
+        if (get && pathname.startsWith('/api/media/')) {
+          const id=pathname.slice('/api/media/'.length)
+          return json(res,200,{id,data:media.read(id).toString('base64')})
+        }
+        if (req.method === 'PUT' && pathname.startsWith('/api/media/')) {
+          const {data}=await payload(req)
+          return json(res,200,media.put(pathname.slice('/api/media/'.length),data))
+        }
+        if (req.method === 'POST' && pathname === '/api/ai/ocr') return json(res,200,await ai.ocr(await payload(req)))
         if (get && pathname === '/api/notes') return json(res, 200, { notes: vault.list(), deleted: vault.deleted() })
         if (get && pathname === '/api/sync/manifest') return json(res, 200, vault.manifest())
         if (req.method === 'POST' && pathname === '/api/sync/read') {
@@ -183,6 +199,7 @@ export function application(options, request = fetch) {
         }
         if (req.method === 'PUT' && pathname.startsWith('/api/notes/')) {
           const input = await payload(req)
+          media.checkRefs(input.text)
           const note=vault.put(pathname.slice('/api/notes/'.length), input)
           ai.invalidate(note.id,note.revision)
           return json(res, 200, note)
@@ -210,7 +227,7 @@ export function application(options, request = fetch) {
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const e = process.env
-  application({ token: e.MOROSHKA_TOKEN, actionsToken: e.ACTIONS_TOKEN, mcpToken:e.MCP_TOKEN, embeddingModel:e.OPENROUTER_EMBEDDING_MODEL, publicUrl: e.PUBLIC_URL,
+  application({ token: e.MOROSHKA_TOKEN, actionsToken: e.ACTIONS_TOKEN, mcpToken:e.MCP_TOKEN, embeddingModel:e.OPENROUTER_EMBEDDING_MODEL, visionModel:e.OPENROUTER_VISION_MODEL, publicUrl: e.PUBLIC_URL,
     dir: e.VAULT_DIR || 'vault', openrouterKey: e.OPENROUTER_API_KEY, model: e.OPENROUTER_MODEL
   }).listen(Number(e.PORT || 8090), e.HOST || '127.0.0.1', () => console.log('Moroshka Notes запущен'))
 }
