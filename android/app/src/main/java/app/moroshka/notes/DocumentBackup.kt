@@ -24,17 +24,13 @@ class DocumentBackup(private val context: Context) {
         val stored = versions(uri)
         val removed = removedItems(uri)
         for ((id, value) in removed) {
-            val text = value.optString("text", "")
-            val base = if (value.isNull("base")) null else value.optString("base", null)
-            if (value.has("text")) vault.restoreDeleted(Note(id, text), base)
+            vault.restoreDeleted(Note(id, value.getString("text")))
         }
-        for ((id, entries) in stored.groupBy { it.id }) {
-            if (id in removed) continue
-            val latest = entries.maxBy { it.time }
-            val existing = vault.all().firstOrNull { it.id == id }
-            if (existing == null) vault.save(Note(id, latest.text), false)
-            else if (existing.text != latest.text) vault.create(latest.text, false)
+        val live = stored.filter { it.id !in removed }.groupBy { it.id }.map { (id, entries) ->
+            val latest = entries.maxWith(compareBy<Version> { it.time }.thenBy { it.text })
+            Note(id, latest.text)
         }
+        vault.restoreFolderNotes(live)
         check(prefs.edit().putString("tree", uri.toString()).commit())
         for (note in vault.all()) save(note)
     }
@@ -73,8 +69,26 @@ class DocumentBackup(private val context: Context) {
             val expression = Regex("^([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\\.deleted\\.json$")
             while (cursor.moveToNext()) expression.matchEntire(cursor.getString(0) ?: "")?.let {
                 val document = DocumentsContract.buildDocumentUriUsingTree(uri, cursor.getString(1))
-                val value = requireNotNull(resolver.openInputStream(document)).bufferedReader().use { stream -> stream.readText() }
-                result[it.groupValues[1]] = org.json.JSONObject(value)
+                val value = requireNotNull(resolver.openInputStream(document)).use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        require(output.size() + count <= 4 * 1024 * 1024) { "Слишком большая метка удаления в папке" }
+                        output.write(buffer, 0, count)
+                    }
+                    val decoder = Charsets.UTF_8.newDecoder()
+                    val text = decoder.decode(java.nio.ByteBuffer.wrap(output.toByteArray())).toString()
+                    val tokenizer = org.json.JSONTokener(text)
+                    val data = tokenizer.nextValue() as? org.json.JSONObject
+                        ?: error("Повреждена метка удаления в папке")
+                    require(tokenizer.nextClean() == '\u0000') { "Повреждена метка удаления в папке" }
+                    val body = data.opt("text") as? String ?: error("В метке удаления нет текста")
+                    require(body.toByteArray(Charsets.UTF_8).size <= 512 * 1024) { "Слишком большая удалённая заметка" }
+                    data
+                }
+                result[it.groupValues[1]] = value
             }
         }
         return result

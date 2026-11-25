@@ -294,9 +294,10 @@ async function sync(automatic = false) {
         applySynced({id,text:r.text,base:r.revision,dirty:false})
         continue
       }
-      if (!n.dirty) continue
-      // Keep the submitted value separate: the editor can change while PUT is in flight.
-      const sentText = n.text, sentBase = n.base
+      if (!n.dirty && r) continue
+      // Absence without a tombstone is not a deletion (server rollback/migration).
+      // A conditional create still refuses a concurrent write or tombstone.
+      const sentText = n.text, sentBase = r ? n.base : null
       const result = await api('/api/notes/'+id,'PUT',{text:sentText,base:sentBase})
       checkpoint()
       const latest = notes.get(id)

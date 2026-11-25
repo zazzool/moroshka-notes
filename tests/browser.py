@@ -290,7 +290,38 @@ def knowledge_check(origin, browser):
     ctx.close()
 
 
-def check(origin):
+def recovery_check(origin, browser, directory):
+    import uuid
+    ctx = browser.new_context(service_workers="block")
+    headers = {"Authorization": "Bearer " + KEY}
+    note_id = str(uuid.uuid4())
+    path = origin + "/api/notes/" + note_id
+    text = "# Recovery fixture\n\nLocal copy survives server rollback"
+    assert ctx.request.put(path, headers=headers, data={"text": text, "base": None}).status == 200
+    page = ctx.new_page()
+    page.goto(origin)
+    connect(page)
+    page.locator("#items .note").filter(has_text="Recovery fixture").click()
+    expect(page.get_by_label("Markdown")).to_have_value(text)
+    # Simulate restoration of an older server volume without a deletion marker.
+    (Path(directory) / (note_id + ".md")).unlink()
+    page.locator("#sync").click()
+    expect(page.locator("#status")).to_have_text("Синхронизировано")
+    notes = ctx.request.get(origin + "/api/notes", headers=headers).json()["notes"]
+    restored = next(n for n in notes if n["id"] == note_id)
+    assert restored["text"] == text
+    # A real tombstone must NOT be revived.
+    assert ctx.request.delete(path, headers=headers, data={"base": restored["revision"]}).status == 200
+    page.locator("#sync").click()
+    expect(page.locator("#status")).to_have_text("Синхронизировано")
+    assert page.locator("#items .note").filter(has_text="Recovery fixture").count() == 0
+    snap = ctx.request.get(origin + "/api/notes", headers=headers).json()
+    assert not any(n["id"] == note_id for n in snap["notes"])
+    assert any(n["id"] == note_id for n in snap["deleted"])
+    ctx.close()
+
+
+def check(origin, directory):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
         design = browser.new_context(viewport={"width": 360, "height": 780}, color_scheme="dark")
@@ -375,6 +406,7 @@ def check(origin):
         auto_sync_check(origin, browser)
         incremental_check(origin, browser)
         knowledge_check(origin, browser)
+        recovery_check(origin, browser, directory)
         browser.close()
 
 
@@ -391,7 +423,7 @@ if __name__ == "__main__":
                                 stdout=subprocess.PIPE, text=True)
         try:
             port = int(proc.stdout.readline())
-            check(f"http://127.0.0.1:{port}")
+            check(f"http://127.0.0.1:{port}", directory)
             print("Browser check passed: links, tasks, offline storage, backups, history, automatic and incremental sync.")
         finally:
             proc.terminate()

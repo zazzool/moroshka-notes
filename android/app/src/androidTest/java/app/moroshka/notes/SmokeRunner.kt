@@ -295,6 +295,27 @@ class SmokeRunner : Instrumentation() {
         return "Knowledge-metadata-ok"
     }
 
+    private fun recoveryFixture(): String {
+        val vault = Vault(targetContext)
+        val live = vault.create("# Live\n\nCurrent text", false)
+        val old = live.copy(text = "# Old\n\nArchived text")
+        val before = vault.all().size
+        vault.restoreDeleted(old)
+        vault.restoreDeleted(old)
+        check(vault.read(live.id) == live)
+        val archive = vault.trashEntries().single { it.name.startsWith(live.id + ".") }
+        check(archive.name.endsWith(".archived") && vault.trashText(archive.name) == old.text)
+        check(vault.restoreFolderNotes(listOf(old)).added == 1)
+        check(vault.restoreFolderNotes(listOf(old)).added == 0)
+        check(vault.all().size == before + 1 && vault.read(live.id) == live)
+        val removed = vault.create("# Removed locally", false)
+        vault.remove(listOf(removed.id))
+        check(vault.restoreFolderNotes(listOf(removed)).added == 1)
+        check(vault.restoreFolderNotes(listOf(removed)).added == 0)
+        check(vault.all().none { it.id == removed.id })
+        return "Recovery-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
@@ -304,6 +325,7 @@ class SmokeRunner : Instrumentation() {
             if (args.containsKey("syncGateFixture")) return@runCatching syncGateFixture()
             if (args.containsKey("incrementalFixture")) return@runCatching incrementalFixture()
             if (args.containsKey("knowledgeFixture")) return@runCatching knowledgeFixture()
+            if (args.containsKey("recoveryFixture")) return@runCatching recoveryFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)
