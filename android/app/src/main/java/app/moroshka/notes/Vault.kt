@@ -203,9 +203,11 @@ class Vault(context: Context) {
                 return response
             } finally { trackConnection(null); conn.disconnect() }
         }
+        // One local snapshot for metadata comparison: never rescan the entire
+        // library for each unchanged row or deletion in the server inventory.
+        val initial = local { repairDeletionCollisions(); all().associateBy { it.id } }
         val known = local {
-            repairDeletionCollisions()
-            val ids = all().map { it.id } + trash.listFiles().orEmpty()
+            val ids = initial.keys.toList() + trash.listFiles().orEmpty()
                 .filter { it.name.endsWith(".md") }.map { it.name.removeSuffix(".md") }
             ids.distinct().mapNotNull { id -> bases.getString(id, null)?.let { id to it } }.toMap()
         }
@@ -217,7 +219,7 @@ class Vault(context: Context) {
             if (row.has("text")) photos.pull(row.getString("text"),::api,::checkpoint)
             else {
                 val id=row.getString("id")
-                val existing=local{all().firstOrNull{it.id==id}}
+                val existing=initial[id]
                 if(existing!=null && KnowledgeApi.revision(existing.text)==row.getString("revision"))photos.pull(existing.text,::api,::checkpoint)
             }
         }
@@ -227,7 +229,7 @@ class Vault(context: Context) {
         for (i in 0 until deleted.length()) local {
             val item = deleted.getJSONObject(i)
             val id = item.getString("id")
-            val current = all().firstOrNull { it.id == id } ?: return@local
+            val current = initial[id] ?: return@local
             val base = bases.getString(id, null)
             val localHash = MessageDigest.getInstance("SHA-256").digest(current.text.toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it) }
