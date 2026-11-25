@@ -7,7 +7,7 @@ import javax.net.ssl.HttpsURLConnection
 
 internal class KnowledgeApi(private val server: String, private val key: String) {
     fun request(path: String, data: JSONObject? = null, method: String = if (data == null) "GET" else "POST"): JSONObject {
-        require(path.startsWith("/api/ai/"))
+        require(path.startsWith("/api/ai/") || path.startsWith("/api/media/"))
         val connection = URL(server + path).openConnection() as HttpsURLConnection
         try {
             connection.instanceFollowRedirects = false

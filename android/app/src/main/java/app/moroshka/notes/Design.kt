@@ -27,12 +27,7 @@ class Design(context: Context) {
     val semibold: Typeface = if (Build.VERSION.SDK_INT >= 28) Typeface.create(regular, 600, false)
         else Typeface.create(regular, Typeface.BOLD)
 
-    fun composer() = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-        if (dark) intArrayOf(color("#4E3546"), color("#42304D"))
-        else intArrayOf(color("#FFF6E9"), color("#FAE4FA"), color("#E9E8FF"))).apply {
-        cornerRadius = dp(24).toFloat()
-        setStroke(dp(1), border)
-    }
+    fun composer() = panel(surface,12,true)
 
     fun graphPanel() = GradientDrawable(GradientDrawable.Orientation.TL_BR,
         intArrayOf(color("#3B294E"), color("#211B32"), color("#543A67"))).apply {
@@ -46,8 +41,6 @@ class Design(context: Context) {
         cornerRadius = dp(radius).toFloat()
         if (outline) setStroke(dp(1), border)
     }
-    fun primary() = GradientDrawable(GradientDrawable.Orientation.TL_BR, gradient).apply {
-        cornerRadius = dp(16).toFloat()
-    }
+    fun primary() = panel(color("#B84F3B"),12)
     fun feedback() = RippleDrawable(ColorStateList.valueOf(if (dark) 0x33FFFFFF else 0x3348374E), null, panel(Color.WHITE, 16))
 }

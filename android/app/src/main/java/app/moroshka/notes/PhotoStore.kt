@@ -32,12 +32,30 @@ internal class PhotoStore(private val context: Context) {
         fun refs(text:String):List<String> = MarkdownMetadata.proseLines(text).mapNotNull { (_,line) ->
             reference.matchEntire(line)?.groupValues?.get(1)
         }.distinct()
+        fun strip(text:String):String {
+            val ids=refs(text)
+            if(ids.isEmpty())return text
+            val prefix=ids.joinToString("\n"){"![Фото](moroshka-media:"+it+")"}+"\n\n"
+            if(text.startsWith(prefix))return text.removePrefix(prefix)
+            val indexes=MarkdownMetadata.proseLines(text).filter{reference.matches(it.second)}.map{it.first}.toSet()
+            return text.split('\n').filterIndexed{i,_->i !in indexes}.joinToString("\n")
+        }
+        fun compose(text:String,ids:List<String>):String {
+            require(ids.distinct().size<=128&&ids.all{valid.matches(it)})
+            if(ids.isEmpty())return text
+            return ids.distinct().joinToString("\n"){"![Фото](moroshka-media:"+it+")"}+"\n\n"+text
+        }
         fun append(text:String,id:String):String {
             require(valid.matches(id))
-            if(id in refs(text))return text
-            val line="![Фото](moroshka-media:"+id+")\n"
-            // Placing the reference before the source guarantees it is not inside an open fence.
-            return if(text.isEmpty())line else line+"\n"+text
+            return if(id in refs(text))text else compose(strip(text),refs(text)+id)
+        }
+        fun preview(text:String):String {
+            val body=MarkdownMetadata.proseLines(strip(text)).map{it.second.trim()}
+                .filter{it.isNotEmpty()&&!Regex("^#{1,6}(?:\\s|$)").containsMatchIn(it)&&
+                    !Regex("^(?:#[\\p{L}\\p{N}_-]+\\s*)+$").matches(it)}
+                .joinToString(" ").replace(Regex("\\s+")," ").trim()
+            val title=MarkdownMetadata.title(text)
+            return body.ifBlank{if(title!="Без названия")title else if(refs(text).isNotEmpty())"Фотозаметка" else "Пустая заметка"}
         }
         fun hash(bytes:ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
         fun bounded(input:InputStream,limit:Int):ByteArray {
@@ -58,9 +76,9 @@ internal class PhotoStore(private val context: Context) {
         }
         fun verify(id:String,bytes:ByteArray){
             require(valid.matches(id)&&hash(bytes)==id){"Контрольная сумма изображения не совпадает"}
-            require(bytes.size in 16..maxBytes && bytes[0].toInt() and 255==255 &&
-                bytes[1].toInt() and 255==216 && bytes[bytes.lastIndex-1].toInt() and 255==255 &&
-                bytes.last().toInt() and 255==217){"Ожидается JPEG до 2 МиБ"}
+            require(bytes.size in 16..maxBytes && (bytes[0].toInt() and 255)==255 &&
+                (bytes[1].toInt() and 255)==216 && (bytes[bytes.lastIndex-1].toInt() and 255)==255 &&
+                (bytes.last().toInt() and 255)==217){"Ожидается JPEG до 2 МиБ"}
             val options=BitmapFactory.Options().apply { inJustDecodeBounds=true }
             BitmapFactory.decodeByteArray(bytes,0,bytes.size,options)
             require(options.outMimeType=="image/jpeg"&&options.outWidth in 1..maxSide&&options.outHeight in 1..maxSide){"Некорректный размер JPEG"}
@@ -93,7 +111,7 @@ internal class PhotoStore(private val context: Context) {
         while(maxOf(bounds.outWidth,bounds.outHeight)/sample>limit*2)sample*=2
         return BitmapFactory.decodeByteArray(bytes,0,bytes.size,BitmapFactory.Options().apply{inSampleSize=sample})
     }
-    fun import(uri:Uri):String {
+    fun importUri(uri:Uri):String {
         val bytes=requireNotNull(context.contentResolver.openInputStream(uri)).use { bounded(it,32*1024*1024) }
         return importBytes(bytes)
     }

@@ -85,7 +85,10 @@ class SmokeRunner : Instrumentation() {
 
             runOnMainSync {
                 val root = activity.window.decorView
-                check(find(root) { it.tag == "homeHero" } != null)
+                check(find(root) { it.tag == "homeHero" } == null)
+                val capture=requireNotNull(find(root){it.tag=="bottomCapture"})
+                val pos=IntArray(2);capture.getLocationOnScreen(pos)
+                check(pos[1]>=root.height/2){"Capture must be in the lower half"}
                 val field = find(root) { it is EditText && it.contentDescription == "Текст новой заметки" } as EditText
                 field.setText(fixture)
                 val resultMethod = activity.javaClass.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType,
@@ -100,9 +103,8 @@ class SmokeRunner : Instrumentation() {
                 updated.setText(fixture + " [[" + target.title + "]] #тест")
                 val save = find(activity.window.decorView) { it is Button && it.text.toString() == "Сохранить" } as Button
                 check(save.performClick())
-                val editor = requireNotNull(findEditor(activity.window.decorView))
-                check(editor.text.toString().contains(fixture))
-                activity.onBackPressed()
+                check(find(activity.window.decorView){it.tag=="bottomCapture"}!=null)
+                check(find(activity.window.decorView){it.contentDescription?.toString()?.contains(fixture)==true}!=null)
             }
             created = Vault(targetContext).all().single { it.title.startsWith(fixture) }
             runOnMainSync {
@@ -111,7 +113,7 @@ class SmokeRunner : Instrumentation() {
                 check(search.performClick())
                 val input = find(activity.window.decorView) { it is EditText && it.contentDescription == "Поиск по заметкам" } as EditText
                 input.setText(fixture)
-                check(find(activity.window.decorView) { it.contentDescription?.toString()?.startsWith(created!!.title) == true } != null)
+                check(find(activity.window.decorView) { it.contentDescription?.toString()?.contains(created!!.title) == true } != null)
                 val links = find(activity.window.decorView) { it is Button && it.text.toString() == "Связи" } as Button
                 check(links.performClick())
                 check(find(activity.window.decorView) { it is KnowledgeGraph } != null)
