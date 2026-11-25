@@ -782,11 +782,15 @@ class MainActivity : Activity() {
     }
     private fun showSemanticSearch() {
         knowledgeRequest("/api/ai/status") { status ->
-            if (!status.optBoolean("enabled")) return@knowledgeRequest notice("На сервере не настроена модель эмбеддингов.")
+            val enabled=status.optBoolean("enabled")
             val pending=status.getJSONArray("pending")
-            val actions=mutableListOf("Смысловой поиск","Удалить векторный индекс")
-            if(pending.length()>0)actions.add(0,"Индексировать следующие "+pending.length()+" заметок")
-            AlertDialog.Builder(this).setTitle("Индекс: "+status.getInt("indexed")+" из "+status.getInt("total"))
+            val actions=mutableListOf("Удалить векторный индекс")
+            if(enabled){
+                actions.add(0,"Смысловой поиск")
+                if(pending.length()>0)actions.add(0,"Индексировать следующие "+pending.length()+" заметок")
+            }
+            AlertDialog.Builder(this).setTitle(if(enabled) "Индекс: "+status.getInt("indexed")+" из "+status.getInt("total")
+                else "Модель эмбеддингов не настроена")
                 .setItems(actions.toTypedArray()){_,i->safely{
                     when {
                         actions[i].startsWith("Индексировать") -> AlertDialog.Builder(this)

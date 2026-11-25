@@ -5,7 +5,7 @@ const tagPattern=tagName
 export const categoryLabels={note:'Заметка',task:'Задача',idea:'Идея',project:'Проект',reference:'Материал'}
 export function applyProposal(text,{title=null,tags=[],category=null}={}){
   if(title!==null&&(typeof title!=='string'||!title.trim()||title.length>120||/[\u0000-\u001f]/u.test(title)))throw Error('Некорректный заголовок')
-  if(!Array.isArray(tags)||tags.some(t=>typeof t!=='string'||!tagPattern.test(t))||
+  if(!Array.isArray(tags)||tags.length>8||tags.some(t=>typeof t!=='string'||!tagPattern.test(t))||
      (category!==null&&!Object.hasOwn(categoryLabels,category)))throw Error('Некорректные метаданные')
   let result=title===null?text:renameHeading(text,title)
   if(category!==null){

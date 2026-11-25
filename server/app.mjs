@@ -172,11 +172,16 @@ export function application(options, request = fetch) {
         }
         if (req.method === 'PUT' && pathname.startsWith('/api/notes/')) {
           const input = await payload(req)
-          return json(res, 200, vault.put(pathname.slice('/api/notes/'.length), input))
+          const note=vault.put(pathname.slice('/api/notes/'.length), input)
+          ai.invalidate(note.id,note.revision)
+          return json(res, 200, note)
         }
         if (req.method === 'DELETE' && pathname.startsWith('/api/notes/')) {
           const { base } = await payload(req)
-          return json(res, 200, vault.remove(pathname.slice('/api/notes/'.length), base))
+          const id=pathname.slice('/api/notes/'.length)
+          const removed=vault.remove(id,base)
+          ai.invalidate(id)
+          return json(res, 200, removed)
         }
         if (get && pathname === '/api/ai/status') return json(res,200,ai.status())
         if (req.method === 'POST' && pathname === '/api/ai/analyze') return json(res,200,await ai.analyze(await payload(req)))
@@ -184,25 +189,7 @@ export function application(options, request = fetch) {
         if (req.method === 'POST' && pathname === '/api/ai/search') return json(res,200,await ai.search(await payload(req)))
         if (req.method === 'POST' && pathname === '/api/ai/related') return json(res,200,ai.related(await payload(req)))
         if (req.method === 'DELETE' && pathname === '/api/ai/index') return json(res,200,ai.clear())
-        if (req.method === 'POST' && pathname === '/api/summary') {
-          if (!openrouterKey || !model) throw new ApiError(503, 'Владелец сервера ещё не подключил OpenRouter')
-          const { id, revision } = await payload(req)
-          const note = vault.read(id)
-          if (!note) throw new ApiError(404, 'Заметка не найдена')
-          if (note.revision !== revision) throw new ApiError(409, 'Сначала синхронизируйте актуальную версию заметки')
-          const reply = await request('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST', headers: { Authorization: 'Bearer ' + openrouterKey, 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(45000),
-            body: JSON.stringify({ model, max_tokens: 500, messages: [
-              { role: 'system', content: 'Кратко перескажи предоставленную заметку на языке автора.' },
-              { role: 'user', content: note.text }
-            ] })
-          })
-          if (!reply.ok) throw new ApiError(502, 'OpenRouter отклонил запрос')
-          const summary = (await reply.json()).choices?.[0]?.message?.content
-          if (typeof summary !== 'string') throw new ApiError(502, 'OpenRouter вернул пустой ответ')
-          return json(res, 200, { summary })
-        }
+        if (req.method === 'POST' && pathname === '/api/summary') return json(res,200,await ai.summarize(await payload(req)))
       }
       throw new ApiError(404, 'Не найдено')
     } catch (err) {

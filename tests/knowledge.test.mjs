@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync,rmSync,readFileSync,writeFileSync } from 'node:fs'
+import { mkdtempSync,rmSync,readFileSync,writeFileSync,existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -43,6 +43,7 @@ test('AI proposals are explicit, validated, revision pinned and never mutate Mar
   const result=await (await api('/api/ai/analyze','POST',{...input,consent:true})).json()
   assert.deepEqual(result,{...input,title:'Предложение',category:'idea',tags:['сон','исследование'],truncated:false})
   assert.equal(calls[0].body.messages[1].content,n.text)
+  assert.deepEqual(calls[0].body.provider,{require_parameters:true,data_collection:'deny',zdr:true})
   assert.equal((await (await api('/api/notes')).json()).notes[0].text,n.text)
   setOverride(()=>Response.json({choices:[{message:{content:'{"title":"bad","category":"bad","tags":[]}'}}]}))
   assert.equal((await api('/api/ai/analyze','POST',{...input,consent:true})).status,502)
@@ -61,6 +62,7 @@ test('semantic index requires consent, reuses exact revisions and hides stale/de
   const status=await (await api('/api/ai/index','POST',{notes:requested,consent:true})).json()
   assert.equal(status.indexed,3)
   assert.equal(calls.length,1)
+  assert.deepEqual(calls[0].body.provider,{data_collection:'deny',zdr:true})
   assert.equal((await api('/api/ai/index','POST',{notes:requested,consent:true})).status,200)
   assert.equal(calls.length,1)
   const result=await (await api('/api/ai/search','POST',{query:'сон',consent:true})).json()
@@ -71,6 +73,8 @@ test('semantic index requires consent, reuses exact revisions and hides stale/de
   assert.equal(calls.length,2)
   await add('# Садовая работа',b.id,b.revision)
   assert.equal((await api('/api/notes/'+c.id,'DELETE',{base:c.revision})).status,200)
+  assert.equal(existsSync(join(dir,'semantic-v1',b.id+'.json')),false)
+  assert.equal(existsSync(join(dir,'semantic-v1',c.id+'.json')),false)
   assert.equal((await (await api('/api/ai/status')).json()).indexed,1)
   assert.deepEqual((await (await api('/api/ai/related','POST',{id:a.id,revision:a.revision})).json()).notes,[])
   assert.equal((await api('/api/ai/index','POST',{notes:[requested[1]],consent:true})).status,409)
@@ -145,4 +149,24 @@ test('metadata scanner protects long fences, invalid closing markers, inline cod
   assert.equal(renameHeading('#\nNot a heading','Title'),'# Title\n\n#\nNot a heading')
   const open=ticks.repeat(4)+'\n# code\n'+ticks.repeat(3)+'\n'
   assert.equal(applyProposal(open,{tags:['tag']}),'#tag\n\n'+open)
+})
+
+
+test('summary requires explicit consent and uses the same privacy routing and bounded content',async t=>{
+  const {api,add,calls,setOverride}=await fixture(t)
+  const n=await add('# Long\n'+'🧠'.repeat(13000))
+  const input={id:n.id,revision:n.revision}
+  assert.equal((await api('/api/summary','POST',input)).status,400)
+  assert.equal(calls.length,0)
+  setOverride(()=>Response.json({choices:[{message:{content:'Short summary'}}]}))
+  const summary=await (await api('/api/summary','POST',{...input,consent:true})).json()
+  assert.deepEqual(summary,{summary:'Short summary',truncated:true})
+  assert.equal(Array.from(calls[0].body.messages[1].content).length,12000)
+  assert.deepEqual(calls[0].body.provider,{data_collection:'deny',zdr:true})
+  setOverride(()=>new Response('x'.repeat(4*1024*1024+1)))
+  assert.equal((await api('/api/summary','POST',{...input,consent:true})).status,502)
+  setOverride(()=>Response.json({choices:[{message:{content:''}}]}))
+  assert.equal((await api('/api/summary','POST',{...input,consent:true})).status,502)
+  const current=(await (await api('/api/notes')).json()).notes[0]
+  assert.equal(current.text,n.text)
 })

@@ -498,7 +498,14 @@ async function semanticDialog(){
     d.status(status.enabled?'Актуальный индекс: '+status.indexed+' из '+status.total:
       'На сервере не настроена модель эмбеддингов.')
     d.body.replaceChildren()
-    if(!status.enabled)return
+    if(!status.enabled){
+      d.body.append(knowledgeButton('Удалить векторный индекс',async()=>{
+        if(!confirm('Удалить векторный индекс сервера? Сами заметки останутся.'))return
+        await api('/api/ai/index','DELETE')
+        if(d.active())d.status('Индекс удалён. Модель эмбеддингов не настроена.')
+      }))
+      return
+    }
     if(status.pending.length){
       d.body.append(knowledgeButton('Индексировать следующие '+status.pending.length+' заметок',async()=>{
         if(!confirm('Передать OpenRouter первые 12 000 символов каждой из '+status.pending.length+' заметок для эмбеддингов? Возможна оплата.'))return
@@ -687,8 +694,8 @@ function start() {
   $('summary').onclick = async () => {
     const n = notes.get(selected)
     if (n.dirty || !token) return alertText('Сначала синхронизируйте заметку','OpenRouter получает сохранённую на вашем сервере версию.')
-    if (!confirm('Отправить текст этой заметки в OpenRouter для краткого пересказа?')) return
-    try { const r = await api('/api/summary','POST',{id:n.id,revision:n.base}); alertText('Резюме',r.summary) } catch(e) {report(e)}
+    if (!confirm('Передать OpenRouter первые 12 000 символов заметки для краткого пересказа? Запрос может быть платным.')) return
+    try { const r = await api('/api/summary','POST',{id:n.id,revision:n.base,consent:true}); alertText(r.truncated?'Резюме первых 12 000 символов':'Резюме',r.summary) } catch(e) {report(e)}
   }
   render()
 }
