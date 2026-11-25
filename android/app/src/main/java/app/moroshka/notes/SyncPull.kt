@@ -36,13 +36,16 @@ internal object SyncPull {
         }
         val entries = notes.associate { item ->
             val id = item.getString("id")
-            id to JSONObject().put("id",id).put("revision",item.getString("revision"))
+            id to JSONObject().put("id",id).put("revision",item.getString("revision")).apply {
+                val time=item.optLong("modifiedAt",0L)
+                if(time>0)put("modifiedAt",time)
+            }
         }.toMutableMap()
         val wanted = entries.values.filter { known[it.getString("id")] != it.getString("revision") }
         for (batch in wanted.chunked(8)) {
             checkpoint()
             val expected = batch.associate { it.getString("id") to it.getString("revision") }.toMutableMap()
-            val response = api("/api/sync/read", JSONObject().put("notes",JSONArray(batch)), "POST")
+            val response = api("/api/sync/read", JSONObject().put("notes",JSONArray(batch.map{JSONObject().put("id",it.getString("id")).put("revision",it.getString("revision"))})), "POST")
             checkpoint()
             val received = objects(response.getJSONArray("notes"))
             check(received.size == batch.size) { INVALID }
@@ -55,7 +58,7 @@ internal object SyncPull {
                     digest(bytes) == revision) { INVALID }
                 checkpoint()
                 expected.remove(id)
-                entries[id] = JSONObject().put("id",id).put("revision",revision).put("text",text)
+                entries.getValue(id).put("text",text)
             }
             check(expected.isEmpty()) { INVALID }
         }

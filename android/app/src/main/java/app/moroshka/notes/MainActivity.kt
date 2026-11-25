@@ -416,15 +416,8 @@ class MainActivity : Activity() {
     }
 
     private fun libraryContent(content: LinearLayout) {
-        section(content, "Библиотека")
-        val controls = row()
-        controls.addView(button("Заметки") { tasks = false; library() }.apply {
-            background = design.panel(if (!tasks) design.tint else design.surface, 16, true)
-        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        controls.addView(button("Задачи") { tasks = true; library() }.apply {
-            background = design.panel(if (tasks) design.tint else design.surface, 16, true)
-        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
-        content.addView(controls)
+        section(content, "Задачи")
+        tasks=true
         val list = column()
         content.addView(list, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
         fun refresh() {
@@ -451,6 +444,10 @@ class MainActivity : Activity() {
             }
         }
         refresh()
+    }
+
+    private fun syncSettings() {
+        val content=column().apply{setPadding(dp(16),dp(8),dp(16),dp(8))}
         content.addView(button("Синхронизировать") {
             val url = settings.getString("url", "").orEmpty()
             val key = settings.getString("key", "").orEmpty()
@@ -474,6 +471,7 @@ class MainActivity : Activity() {
         })
         syncStatus.visibility = if (BackgroundSync.enabled(this)) View.VISIBLE else View.GONE
         content.addView(syncStatus)
+        AlertDialog.Builder(this).setTitle("Синхронизация").setView(content).setPositiveButton("Закрыть",null).show()
     }
 
     private fun noteCard(container: LinearLayout, note: Note) {
@@ -560,7 +558,7 @@ class MainActivity : Activity() {
         }
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива", "Корзина на устройстве")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива", "Корзина на устройстве", "Синхронизация")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
             else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
@@ -584,7 +582,8 @@ class MainActivity : Activity() {
                         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
                             .addCategory(Intent.CATEGORY_OPENABLE), 7)
                     }.show()
-            } else safely { showTrash() }
+            } else if(index==8) safely { showTrash() }
+            else safely { syncSettings() }
         }.show()
     }
 
@@ -782,7 +781,7 @@ class MainActivity : Activity() {
                     vault.save(note.copy(text=PhotoStore.append(note.text,id)))
                 }
             }
-            if(camera)cameraFile().delete()
+            if(camera&&result.isSuccess)cameraFile().delete()
             runOnUiThread{
                 if(isDestroyed)return@runOnUiThread
                 syncing=false;progress.dismiss()
@@ -793,7 +792,13 @@ class MainActivity : Activity() {
                     }
                     safely{edit(note)}
                     Toast.makeText(this,"Фотография сохранена",Toast.LENGTH_SHORT).show()
-                }.onFailure{notice(it.message?:"Не удалось сохранить фотографию")}
+                }.onFailure{error->
+                    if(camera&&cameraFile().exists()){
+                        photoTarget=target
+                        AlertDialog.Builder(this).setMessage((error.message?:"Не удалось сохранить фотографию")+". Исходный снимок сохранён для повторной попытки.")
+                            .setNegativeButton("Закрыть",null).setPositiveButton("Повторить"){_,_->safely{importPhoto(null,true)}}.show()
+                    }else notice(error.message?:"Не удалось сохранить фотографию")
+                }
                 val shared=pendingShare
                 if(shared!=null){pendingShare=null;safely{flush();edit(vault.create(shared))}}
                 releaseBackground()

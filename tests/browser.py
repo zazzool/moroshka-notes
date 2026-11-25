@@ -321,6 +321,64 @@ def recovery_check(origin, browser, directory):
     ctx.close()
 
 
+def photo_check(origin, browser):
+    import base64
+    jpeg=base64.b64decode("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAYADADASIAAhEBAxEB/8QAGAABAAMBAAAAAAAAAAAAAAAAAAQFBgf/xAAxEAAAAgcDCwQDAAAAAAAAAAAAAQIDBAUGBxIRFCETFhcYIlZnlaTT4iQmMVEzNUH/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8A7VFM4oEhV+tTmfz9ujyZqcqpua9ZTUiSaO0igZHspEeB/wBFTrByw3m6Bq7YtopmXm+/Wp2ZlRu88hT6t2urLM6ypEkthOsrbLbDwwMjIVOmThxMnkfmAawcsN5ugau2GsHLDeboGrthpk4cTJ5H5hpk4cTJ5H5gGsHLDeboGrtjQQVNKDo3eq12ww+L82qlJtCau6rlViskkUTO1NAi+UkcLbcRLgWMs7b97ciRyXWj90w3bLVVfj2jqspx+qi+xqgAAAAAAAAAAH//2Q==")
+    ctx=browser.new_context(viewport={"width":390,"height":840},accept_downloads=True)
+    page=ctx.new_page()
+    page.goto(origin)
+    expect(page.locator("#capture")).to_be_visible()
+    assert page.locator("#capture").bounding_box()["y"]>420
+    page.get_by_label("О чём вы думаете?").fill("Контекст фотографии")
+    page.locator("#capture-photo").click()
+    page.locator("#photo-source").get_by_role("button",name="Отмена").click()
+    page.locator("#photo-file").set_input_files({"name":"photo.jpg","mimeType":"image/jpeg","buffer":jpeg})
+    expect(page.locator("#note-photos .photo-tile")).to_have_count(1)
+    expect(page.get_by_label("Markdown")).to_have_value("# Контекст фотографии\n\nКонтекст фотографии")
+    page.get_by_label("Markdown").fill("# Фото\n\nТекст рядом с изображением")
+    page.get_by_role("button",name="Закрыть редактор").click()
+    page.evaluate("navigator.serviceWorker.ready")
+    ctx.set_offline(True)
+    page.reload()
+    page.locator("#items .note").filter(has_text="Текст рядом с изображением").click()
+    expect(page.locator("#note-photos .photo-tile")).to_have_count(1)
+    page.locator("#note-photos button").first.click()
+    expect(page.locator("#photo-status")).to_have_text("Фотография сохранена")
+    assert page.locator("#photo-image").evaluate("(img)=>img.complete && img.naturalWidth>0")
+    page.locator("#photo-view").get_by_role("button",name="Закрыть").click()
+    page.get_by_role("button",name="Закрыть редактор").click()
+    ctx.set_offline(False)
+    connect(page)
+    second=browser.new_context()
+    other=second.new_page();other.goto(origin);connect(other)
+    other.locator("#items .note").filter(has_text="Текст рядом с изображением").click()
+    expect(other.locator("#note-photos .photo-tile")).to_have_count(1)
+    other.locator("#note-photos button").first.click()
+    expect(other.locator("#photo-status")).to_have_text("Фотография сохранена")
+    other.route("**/api/ai/ocr",lambda route:route.fulfill(json={"id":route.request.post_data_json["id"],"text":"Распознанная строка"}))
+    other.once("dialog",lambda d:d.accept())
+    other.locator("#ocr-start").click()
+    expect(other.locator("#ocr-text")).to_have_value("Распознанная строка")
+    other.locator("#ocr-text").fill("Проверенный текст")
+    other.locator("#ocr-accept").click()
+    assert "Проверенный текст" in other.get_by_label("Markdown").input_value()
+    assert "moroshka-media:" not in other.get_by_label("Markdown").input_value()
+    other.get_by_role("button",name="Закрыть редактор").click()
+    other.get_by_text("Резервные копии",exact=True).click()
+    with other.expect_download() as dl: other.locator("#backup-export").click()
+    archive=dl.value.path().read_bytes()
+    parsed=json.loads(archive)
+    assert parsed["version"]==2 and len(parsed["images"])==1
+    third=browser.new_context()
+    restored=third.new_page();restored.goto(origin)
+    restored.locator("#backup-file").set_input_files({"name":"photos.json","mimeType":"application/json","buffer":archive})
+    expect(restored.locator("#msgTitle")).to_have_text("Архив восстановлен")
+    restored.get_by_role("button",name="Закрыть",exact=True).click()
+    restored.locator("#items .note").filter(has_text="Проверенный текст").click()
+    expect(restored.locator("#note-photos .photo-tile")).to_have_count(1)
+    third.close();second.close();ctx.close()
+
+
 def check(origin, directory):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.getenv("CHROMIUM"), args=["--no-sandbox"])
@@ -335,6 +393,10 @@ def check(origin, directory):
         preview.reload()
         expect(preview.get_by_label("О чём вы думаете?")).to_have_value("Мысль для проверки #дизайн")
         preview.get_by_role("button", name="Сохранить", exact=True).click()
+        expect(preview.locator("#capture-text")).to_have_value("")
+        expect(preview.locator("#items .note")).to_have_count(1)
+        assert preview.locator("#capture").bounding_box()["y"] > 390
+        preview.locator("#items .note").first.click()
         expect(preview.get_by_label("Markdown")).to_have_value("# Мысль для проверки #дизайн\n\nМысль для проверки #дизайн")
         assert preview.evaluate("document.fonts.load('16px Manrope').then(fs => fs.length > 0 && fs.every(f => f.status === 'loaded'))")
         design.close()
@@ -407,6 +469,7 @@ def check(origin, directory):
         incremental_check(origin, browser)
         knowledge_check(origin, browser)
         recovery_check(origin, browser, directory)
+        photo_check(origin, browser)
         browser.close()
 
 

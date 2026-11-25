@@ -11,8 +11,8 @@ android {
         testInstrumentationRunner = "app.moroshka.notes.SmokeRunner"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.1.0-alpha.10"
+        versionCode = 11
+        versionName = "0.1.0-alpha.11"
         resValue("string", "moroshka_app_name", "Морошка")
     }
     buildTypes {

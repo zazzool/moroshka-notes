@@ -250,6 +250,7 @@ async function sync(automatic = false) {
     const knownBases = new Map([...notes.values()].map(n=>[n.id,n.base]))
     const {notes:remote, deleted = []} = await pullSnapshot(api,knownBases,checkpoint)
     checkpoint()
+    $('note-photos').dataset.key=''
     for(const r of remote){
       if(typeof r.text==='string')await pullImages(r.text,api,checkpoint)
       else{
@@ -281,15 +282,18 @@ async function sync(automatic = false) {
       const r = byId.get(id)
       if (r && !n) {
         if (typeof r.text !== 'string') throw Error('Локальная библиотека изменилась. Повторите обмен.')
-        applySynced({id:r.id,text:r.text,base:r.revision,dirty:false}); continue
+        applySynced({id:r.id,text:r.text,base:r.revision,dirty:false,modifiedAt:r.modifiedAt,timeSource:r.modifiedAt?'server':'received'}); continue
       }
       if (!n) continue
       if (r && typeof r.text !== 'string') {
         if (n.base !== r.revision) throw Error('Локальная редакция изменилась. Повторите обмен.')
-        if (!n.dirty) continue
+        if (!n.dirty) {
+          if(r.modifiedAt&&n.modifiedAt!==r.modifiedAt)applySynced({...n,modifiedAt:r.modifiedAt,timeSource:'server'})
+          continue
+        }
       }
       if (r && r.text === n.text) {
-        if (n.dirty || n.base !== r.revision) applySynced({id,text:n.text,base:r.revision,dirty:false})
+        if (n.dirty || n.base !== r.revision || (r.modifiedAt&&n.modifiedAt!==r.modifiedAt)) applySynced({id,text:n.text,base:r.revision,dirty:false,modifiedAt:r.modifiedAt,timeSource:r.modifiedAt?'server':n.timeSource})
         continue
       }
       if (r && (!n.dirty || r.revision !== n.base)) {
@@ -299,7 +303,7 @@ async function sync(automatic = false) {
           create(new Blob([copy]).size > 512*1024 ? n.text : copy)
           conflicts++
         }
-        applySynced({id,text:r.text,base:r.revision,dirty:false})
+        applySynced({id,text:r.text,base:r.revision,dirty:false,modifiedAt:r.modifiedAt,timeSource:r.modifiedAt?'server':'received'})
         continue
       }
       if (!n.dirty && r) continue

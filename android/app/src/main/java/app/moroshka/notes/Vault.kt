@@ -162,8 +162,9 @@ class Vault(context: Context) {
             check(entry.delete()) { "Не удалось завершить восстановление корзины" }
         }
     }
-    private fun mark(id: String, revision: String) {
+    private fun mark(id: String, revision: String, modifiedAt:Long=0) {
         check(bases.edit().putString(id, revision).commit()) { "Не удалось сохранить ревизию" }
+        if(modifiedAt>0)file(id).baseFile.setLastModified(modifiedAt)
     }
     /** Network exchange is serialized; local mutations are short, guarded checkpoints.
      * A background job loses its lease as soon as an activity becomes visible.
@@ -214,6 +215,11 @@ class Vault(context: Context) {
         for (i in 0 until list.length()) {
             val row = list.getJSONObject(i)
             if (row.has("text")) photos.pull(row.getString("text"),::api,::checkpoint)
+            else {
+                val id=row.getString("id")
+                val existing=local{all().firstOrNull{it.id==id}}
+                if(existing!=null && KnowledgeApi.revision(existing.text)==row.getString("revision"))photos.pull(existing.text,::api,::checkpoint)
+            }
         }
         val remote = (0 until list.length()).map { list.getJSONObject(it) }.associateBy { it.getString("id") }.toMutableMap()
         var conflicts = 0
@@ -245,7 +251,7 @@ class Vault(context: Context) {
                 backup.clearDeletion(id)
                 val archived = File(trash, id + "." + UUID.randomUUID() + ".archived")
                 check(entry.renameTo(archived)) { "Не удалось сохранить версию в корзине" }
-                mark(id, other.getString("revision"))
+                mark(id, other.getString("revision"),other.optLong("modifiedAt",0))
                 remote.remove(id)
                 conflicts++
             }
@@ -257,7 +263,7 @@ class Vault(context: Context) {
             val other = remote.remove(note.id)
             if (other != null) {
                 val revision = other.getString("revision")
-                if (localHash == revision) { local { mark(note.id, revision) }; continue }
+                if (localHash == revision) { local { mark(note.id, revision,other.optLong("modifiedAt",0)) }; continue }
                 if (revision != base) {
                     local {
                         if (localHash != base) {
@@ -266,7 +272,7 @@ class Vault(context: Context) {
                             conflicts++
                         }
                         save(Note(note.id, other.getString("text")))
-                        mark(note.id, revision)
+                        mark(note.id, revision,other.optLong("modifiedAt",0))
                     }
                     continue
                 }
@@ -280,7 +286,7 @@ class Vault(context: Context) {
         }
         for ((id, obj) in remote) local {
             save(Note(id, obj.getString("text")))
-            mark(id, obj.getString("revision"))
+            mark(id, obj.getString("revision"),obj.optLong("modifiedAt",0))
         }
         return conflicts
     }

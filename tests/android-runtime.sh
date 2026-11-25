@@ -77,7 +77,7 @@ done
 adbc install -r "$app"
 adbc install -r "$test_apk"
 runner='app.moroshka.notes.debug.test/app.moroshka.notes.SmokeRunner'
-for fixture in recoveryFixture backupFixture historyFixture incrementalFixture knowledgeFixture syncGateFixture designFixture default; do
+for fixture in recoveryFixture backupFixture historyFixture incrementalFixture knowledgeFixture syncGateFixture photoFixture designFixture default; do
   echo "Running $fixture"
   adbc shell pm clear app.moroshka.notes.debug | grep -Fx Success
   if [[ "$fixture" == default ]]; then

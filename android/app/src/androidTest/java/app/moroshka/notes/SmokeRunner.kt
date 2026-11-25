@@ -332,6 +332,39 @@ class SmokeRunner : Instrumentation() {
         return "Recovery-ok"
     }
 
+    private fun photoFixture():String {
+        val vault=Vault(targetContext)
+        val bitmap=android.graphics.Bitmap.createBitmap(120,80,android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.WHITE)
+        val output=java.io.ByteArrayOutputStream()
+        check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output))
+        bitmap.recycle()
+        val id=vault.photos.importBytes(output.toByteArray())
+        val bytes=requireNotNull(vault.photos.read(id))
+        PhotoStore.verify(id,bytes)
+        val original="# Фото\n\nОписание"
+        val text=PhotoStore.append(original,id)
+        check(PhotoStore.refs(text)==listOf(id) && PhotoStore.strip(text)==original)
+        val note=vault.create(text,false)
+        val archive=BackupArchive.encode(listOf(note),vault.photos::read)
+        val decoded=BackupArchive.decodeBundle(archive)
+        check(decoded.notes.single().note==note&&decoded.images.getValue(id).contentEquals(bytes))
+        check(vault.restoreArchive(archive).skipped==1)
+        val activity=startActivitySync(Intent(targetContext,MainActivity::class.java)
+            .setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        waitForIdleSync()
+        runOnMainSync{
+            val editor=requireNotNull(findEditor(activity.window.decorView))
+            check(editor.text.toString()==original)
+            check(find(activity.window.decorView){it.contentDescription=="Открыть фотографию"}!=null)
+            editor.setText(original+"\n\nПравка")
+            activity.onBackPressed()
+            activity.finish()
+        }
+        check(vault.all().any{PhotoStore.strip(it.text).endsWith("Правка")&&id in PhotoStore.refs(it.text)})
+        return "Photo-capture-storage-archive-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
@@ -341,6 +374,7 @@ class SmokeRunner : Instrumentation() {
             if (args.containsKey("syncGateFixture")) return@runCatching syncGateFixture()
             if (args.containsKey("incrementalFixture")) return@runCatching incrementalFixture()
             if (args.containsKey("knowledgeFixture")) return@runCatching knowledgeFixture()
+            if (args.containsKey("photoFixture")) return@runCatching photoFixture()
             if (args.containsKey("recoveryFixture")) return@runCatching recoveryFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
