@@ -10,8 +10,8 @@ import java.util.UUID
 import javax.net.ssl.HttpsURLConnection
 
 data class Note(val id: String, val text: String) {
-    val title: String get() = Regex("(?m)^#\\s+(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: "Без названия"
-    val links: List<String> get() = Regex("\\[\\[([^]\\n]+)]]").findAll(text).map { it.groupValues[1].trim() }.toList()
+    val title: String get() = MarkdownMetadata.title(text)
+    val links: List<String> get() = MarkdownMetadata.links(text)
 }
 
 class Vault(context: Context) {
@@ -77,21 +77,36 @@ class Vault(context: Context) {
 
     /** Add-only import; previously deleted IDs are not reused. Retrying is safe. */
     fun restoreArchive(bytes: ByteArray): BackupArchive.Result = synchronized(writeLock) {
-        val entries = BackupArchive.decode(bytes)
-        val deletedIds = trash.listFiles().orEmpty().map { it.name.removeSuffix(".md") }
-            .filter { validId.matches(it) }.toSet()
-        val plan = BackupArchive.plan(entries, all(), deletedIds)
+        restoreEntries(BackupArchive.decode(bytes), true)
+    }
+
+    /** External folders are archival evidence, not instructions to delete live notes. */
+    fun restoreFolderNotes(notes: List<Note>): BackupArchive.Result = synchronized(writeLock) {
+        require(notes.map { it.id }.distinct().size == notes.size)
+        val entries = notes.map {
+            require(validId.matches(it.id) && it.text.toByteArray(Charsets.UTF_8).size <= 512 * 1024)
+            BackupArchive.Entry(it, KnowledgeApi.revision(it.text))
+        }
+        restoreEntries(entries, false)
+    }
+
+    private fun restoreEntries(entries: List<BackupArchive.Entry>, withBackup: Boolean): BackupArchive.Result {
+        val current = all()
+        val liveIds = current.map { it.id }.toSet()
+        val deletedIds = trash.listFiles().orEmpty().filter { trashName.matches(it.name) }
+            .map { it.name.substringBefore('.') }.filter { it !in liveIds }.toSet()
+        val plan = BackupArchive.plan(entries, current, deletedIds)
         var added = 0
         for (note in plan.additions) {
             try {
-                save(note)
+                save(note, withBackup)
                 added++
             } catch (error: Exception) {
                 throw IllegalStateException("Импорт прерван после $added записей. Существующие заметки не заменены. " +
                     "Повторите импорт после устранения ошибки: " + (error.message ?: "Ошибка записи"), error)
             }
         }
-        BackupArchive.Result(added, plan.skipped, plan.conflicts)
+        return BackupArchive.Result(added, plan.skipped, plan.conflicts)
     }
 
     fun remove(ids: Collection<String>): Unit = synchronized(writeLock) {
@@ -102,21 +117,46 @@ class Vault(context: Context) {
             check(!destination.exists() && File(dir, id + ".md").renameTo(destination)) { "Не удалось переместить заметку в корзину" }
         }
     }
-    fun restoreDeleted(note: Note, base: String?): Unit = synchronized(writeLock) {
+    /** A deletion imported from a folder might belong to a different server or
+     * an older backup. Keep its content, never its pending deletion or base. */
+    fun restoreDeleted(note: Note): Unit = synchronized(writeLock) {
         require(validId.matches(note.id))
-        val destination = File(trash, note.id + ".md")
-        if (!destination.exists()) {
-            val file = AtomicFile(destination)
-            val stream = file.startWrite()
-            try {
-                stream.write(note.text.toByteArray(Charsets.UTF_8))
-                file.finishWrite(stream)
-            } catch (error: Exception) {
-                file.failWrite(stream)
-                throw error
-            }
+        archiveDeletedCopy(note)
+    }
+
+    private fun archiveDeletedCopy(note: Note) {
+        val bytes = note.text.toByteArray(Charsets.UTF_8)
+        require(bytes.size <= 512 * 1024) { "Запись корзины больше 512 КиБ" }
+        val suffix = UUID.nameUUIDFromBytes(bytes).toString()
+        val destination = File(trash, note.id + "." + suffix + ".archived")
+        val file = AtomicFile(destination)
+        if (destination.exists() || File(destination.path + ".bak").exists()) {
+            check(file.readFully().contentEquals(bytes)) { "Конфликт архивной записи корзины" }
+            return
         }
-        if (base != null) mark(note.id, base)
+        val stream = file.startWrite()
+        try {
+            stream.write(bytes)
+            file.finishWrite(stream)
+        } catch (error: Exception) {
+            file.failWrite(stream)
+            throw error
+        }
+        check(file.readFully().contentEquals(bytes)) { "Не удалось проверить архивную запись корзины" }
+    }
+
+    /** Repair interrupted restores or legacy folder imports that left a live note
+     * and a pending deletion under the same UUID. The live note wins locally;
+     * the old deleted text remains recoverable, and cannot delete remote data. */
+    private fun repairDeletionCollisions() {
+        val live = all().map { it.id }.toSet()
+        for (entry in trash.listFiles().orEmpty()) {
+            val id = entry.name.removeSuffix(".md")
+            if (!entry.name.endsWith(".md") || id !in live) continue
+            archiveDeletedCopy(Note(id, entry.readText(Charsets.UTF_8)))
+            backup.clearDeletion(id)
+            check(entry.delete()) { "Не удалось завершить восстановление корзины" }
+        }
     }
     private fun mark(id: String, revision: String) {
         check(bases.edit().putString(id, revision).commit()) { "Не удалось сохранить ревизию" }
@@ -159,6 +199,7 @@ class Vault(context: Context) {
             } finally { trackConnection(null); conn.disconnect() }
         }
         val known = local {
+            repairDeletionCollisions()
             val ids = all().map { it.id } + trash.listFiles().orEmpty()
                 .filter { it.name.endsWith(".md") }.map { it.name.removeSuffix(".md") }
             ids.distinct().mapNotNull { id -> bases.getString(id, null)?.let { id to it } }.toMap()
@@ -221,7 +262,10 @@ class Vault(context: Context) {
                     continue
                 }
             }
-            val result = api("/api/notes/" + note.id, JSONObject().put("text", note.text).put("base", base ?: JSONObject.NULL))
+            // Missing UUID without a tombstone can mean server rollback or migration.
+            // A null base is a conditional create, never an unconditional overwrite.
+            val result = api("/api/notes/" + note.id, JSONObject().put("text", note.text)
+                .put("base", if (other == null) JSONObject.NULL else base ?: JSONObject.NULL))
             local { mark(note.id, result.getString("revision")) }
         }
         for ((id, obj) in remote) local {

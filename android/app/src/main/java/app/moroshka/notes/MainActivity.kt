@@ -432,8 +432,8 @@ class MainActivity : Activity() {
             list.removeAllViews()
             for (note in vault.recent()) {
                 if (!tasks) noteCard(list, note)
-                else note.text.lines().forEachIndexed { index, line ->
-                    val match = Regex("^\\s*[-*] \\[([ xX])] (.+)").find(line) ?: return@forEachIndexed
+                else MarkdownMetadata.proseLines(note.text).forEach { (index, line) ->
+                    val match = Regex("^\\s*[-*] \\[([ xX])] (.+)").find(line) ?: return@forEach
                     list.addView(CheckBox(this).apply {
                         text = match.groupValues[2] + " · " + note.title
                         setTextColor(design.text); buttonTintList = ColorStateList.valueOf(design.secondary)
@@ -516,7 +516,7 @@ class MainActivity : Activity() {
             val tags = MarkdownMetadata.tags(note.text)
             contentDescription = listOf(note.title, preview, tags.joinToString(" ") { "#" + it })
                 .filter { it.isNotBlank() }.joinToString(". ")
-            if (tags.isNotEmpty()) addView(label(tags.joinToString("  ") { "#$it" }, 13f).apply {
+            if (tags.isNotEmpty()) addView(label(tags.joinToString("  ") { tag -> KnowledgeApi.labels[tag.removePrefix("type-")]?.takeIf { tag.startsWith("type-") } ?: "#$tag" }, 13f).apply {
                 setTextColor(design.secondary); setPadding(dp(10), dp(5), dp(10), dp(5)); maxLines = 2
                 background = design.panel(design.tint, 12)
             }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(8) })
@@ -782,11 +782,15 @@ class MainActivity : Activity() {
     }
     private fun showSemanticSearch() {
         knowledgeRequest("/api/ai/status") { status ->
-            if (!status.optBoolean("enabled")) return@knowledgeRequest notice("На сервере не настроена модель эмбеддингов.")
+            val enabled=status.optBoolean("enabled")
             val pending=status.getJSONArray("pending")
-            val actions=mutableListOf("Смысловой поиск","Удалить векторный индекс")
-            if(pending.length()>0)actions.add(0,"Индексировать следующие "+pending.length()+" заметок")
-            AlertDialog.Builder(this).setTitle("Индекс: "+status.getInt("indexed")+" из "+status.getInt("total"))
+            val actions=mutableListOf("Удалить векторный индекс")
+            if(enabled){
+                actions.add(0,"Смысловой поиск")
+                if(pending.length()>0)actions.add(0,"Индексировать следующие "+pending.length()+" заметок")
+            }
+            AlertDialog.Builder(this).setTitle(if(enabled) "Индекс: "+status.getInt("indexed")+" из "+status.getInt("total")
+                else "Модель эмбеддингов не настроена")
                 .setItems(actions.toTypedArray()){_,i->safely{
                     when {
                         actions[i].startsWith("Индексировать") -> AlertDialog.Builder(this)
@@ -884,8 +888,7 @@ class MainActivity : Activity() {
         val links = Note(requireNotNull(current), field.text.toString()).links.distinct()
         if (links.isEmpty()) return notice("В заметке пока нет исходящих связей.")
         AlertDialog.Builder(this).setTitle("Удалить связь").setItems(links.toTypedArray()) { _, index ->
-            val pattern = Regex("\\[\\[\\s*" + Regex.escape(links[index]) + "\\s*]]", RegexOption.IGNORE_CASE)
-            field.setText(pattern.replace(field.text.toString()) { it.value.removePrefix("[[").removeSuffix("]]") })
+            field.setText(MarkdownMetadata.removeLink(field.text.toString(), links[index]))
             safely { flush() }
         }.show()
     }

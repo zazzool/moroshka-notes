@@ -1,6 +1,7 @@
 import { encodeArchive, decodeArchive, planRestore, maxArchiveBytes } from '/backup.mjs'
 import { pullSnapshot } from '/sync-pull.mjs'
 import { applyProposal, appendLink, categoryLabels } from '/knowledge.mjs'
+import { titleOf, linksOf, tagsOf, scan } from '/markdown.mjs'
 
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
@@ -19,8 +20,8 @@ let activePairing = null
 let archiveGeneration = 0
 let archiveText = null
 let archiveSourceId = null
-const title = n => n.text.match(/^#\s+(.+)$/m)?.[1].trim() || 'Без названия'
-const links = text => [...text.matchAll(/\[\[([^\]\n]+)\]\]/g)].map(m => m[1].trim())
+const title = n => titleOf(n.text)
+const links = linksOf
 const norm = text => text.trim().toLocaleLowerCase()
 function put(note) {
   if (new Blob([note.text]).size > 512 * 1024) throw Error('Предел одной заметки — 512 КиБ')
@@ -73,21 +74,6 @@ function related() {
     group.append(block)
   }
 }
-function tagsOf(text) {
-  const tags = new Set()
-  let fence = null
-  for (const line of text.split('\n')) {
-    const marker = line.trimStart().match(/^(\x60{3,}|~{3,})/)?.[1]
-    if (marker) {
-      if (!fence) fence = marker
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null
-      continue
-    }
-    if (fence || /^\s*#\s/.test(line)) continue
-    for (const match of line.matchAll(/(?<!\S)#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,39})(?![\p{L}\p{N}_-])/gu)) tags.add(match[1])
-  }
-  return [...tags]
-}
 function render() {
   $('capture').hidden = view !== 'notes'
   const list = $('items'); list.replaceChildren()
@@ -104,14 +90,14 @@ function render() {
       const tags = tagsOf(n.text)
       if (tags.length) {
         const group = el('span','','note-tags')
-        for (const tag of tags.slice(0,5)) group.append(el('span','#'+tag,'chip'))
+        for (const tag of tags.slice(0,5)) group.append(el('span',tag.startsWith('type-')&&categoryLabels[tag.slice(5)]?categoryLabels[tag.slice(5)]:'#'+tag,'chip'))
         if (tags.length > 5) group.append(el('span','+'+(tags.length-5),'chip'))
         body.append(group)
       }
       b.append(symbol,body)
       list.append(b); count++
     } else {
-      n.text.split('\n').forEach((line,i) => {
+      scan(n.text).prose.forEach(({line,index:i}) => {
         const m = line.match(/^\s*[-*] \[([ xX])\] (.+)/); if (!m) return
         const row = el('div','','task'); const check = el('input',''); check.type = 'checkbox'; check.checked = m[1] !== ' '
         check.setAttribute('aria-label', m[2])
@@ -294,9 +280,10 @@ async function sync(automatic = false) {
         applySynced({id,text:r.text,base:r.revision,dirty:false})
         continue
       }
-      if (!n.dirty) continue
-      // Keep the submitted value separate: the editor can change while PUT is in flight.
-      const sentText = n.text, sentBase = n.base
+      if (!n.dirty && r) continue
+      // Absence without a tombstone is not a deletion (server rollback/migration).
+      // A conditional create still refuses a concurrent write or tombstone.
+      const sentText = n.text, sentBase = r ? n.base : null
       const result = await api('/api/notes/'+id,'PUT',{text:sentText,base:sentBase})
       checkpoint()
       const latest = notes.get(id)
@@ -511,7 +498,14 @@ async function semanticDialog(){
     d.status(status.enabled?'Актуальный индекс: '+status.indexed+' из '+status.total:
       'На сервере не настроена модель эмбеддингов.')
     d.body.replaceChildren()
-    if(!status.enabled)return
+    if(!status.enabled){
+      d.body.append(knowledgeButton('Удалить векторный индекс',async()=>{
+        if(!confirm('Удалить векторный индекс сервера? Сами заметки останутся.'))return
+        await api('/api/ai/index','DELETE')
+        if(d.active())d.status('Индекс удалён. Модель эмбеддингов не настроена.')
+      }))
+      return
+    }
     if(status.pending.length){
       d.body.append(knowledgeButton('Индексировать следующие '+status.pending.length+' заметок',async()=>{
         if(!confirm('Передать OpenRouter первые 12 000 символов каждой из '+status.pending.length+' заметок для эмбеддингов? Возможна оплата.'))return
@@ -700,8 +694,8 @@ function start() {
   $('summary').onclick = async () => {
     const n = notes.get(selected)
     if (n.dirty || !token) return alertText('Сначала синхронизируйте заметку','OpenRouter получает сохранённую на вашем сервере версию.')
-    if (!confirm('Отправить текст этой заметки в OpenRouter для краткого пересказа?')) return
-    try { const r = await api('/api/summary','POST',{id:n.id,revision:n.base}); alertText('Резюме',r.summary) } catch(e) {report(e)}
+    if (!confirm('Передать OpenRouter первые 12 000 символов заметки для краткого пересказа? Запрос может быть платным.')) return
+    try { const r = await api('/api/summary','POST',{id:n.id,revision:n.base,consent:true}); alertText(r.truncated?'Резюме первых 12 000 символов':'Резюме',r.summary) } catch(e) {report(e)}
   }
   render()
 }

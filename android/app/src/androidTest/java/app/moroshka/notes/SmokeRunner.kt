@@ -292,7 +292,42 @@ class SmokeRunner : Instrumentation() {
         check(runCatching{KnowledgeApi.metadata(text,"bad\nheading",emptyList(),null)}.isFailure)
         check(runCatching{KnowledgeApi.link(text,"Same",listOf("same","Same"),emptyList())}.isFailure)
         check(KnowledgeApi.link(text,"Target",listOf("Target"),emptyList())=="[[Target]]\n\n"+text)
+        val ticks = "\u0060"
+        val example = listOf(ticks.repeat(4)+"js","# Fake","#type-task [[Fake]]","- [ ] Fake",
+            ticks.repeat(3),ticks.repeat(4)+"not closing","# Still fake",ticks.repeat(4),
+            "# Real","Body "+ticks+"#fake [[Fake]]"+ticks+" #real [[Target]]",
+            "    #fake [[Fake]]","- [ ] Real task","#type-task").joinToString("\n")
+        check(MarkdownMetadata.title(example)=="Real")
+        check(MarkdownMetadata.links(example)==listOf("Target"))
+        check(MarkdownMetadata.tags(example)==listOf("real","type-task"))
+        check(MarkdownMetadata.proseLines(example).filter{it.second.startsWith("- [ ]")}.size==1)
+        val changedExample=KnowledgeApi.metadata(example,"New",listOf("REAL","new"),"idea")
+        check(MarkdownMetadata.title(changedExample)=="New")
+        check(changedExample.contains("#type-task [[Fake]]"))
+        check(MarkdownMetadata.tags(changedExample)==listOf("real","new","type-idea"))
+        check(MarkdownMetadata.removeLink(example,"Target").contains(ticks+"#fake [[Fake]]"+ticks))
         return "Knowledge-metadata-ok"
+    }
+
+    private fun recoveryFixture(): String {
+        val vault = Vault(targetContext)
+        val live = vault.create("# Live\n\nCurrent text", false)
+        val old = live.copy(text = "# Old\n\nArchived text")
+        val before = vault.all().size
+        vault.restoreDeleted(old)
+        vault.restoreDeleted(old)
+        check(vault.read(live.id) == live)
+        val archive = vault.trashEntries().single { it.name.startsWith(live.id + ".") }
+        check(archive.name.endsWith(".archived") && vault.trashText(archive.name) == old.text)
+        check(vault.restoreFolderNotes(listOf(old)).added == 1)
+        check(vault.restoreFolderNotes(listOf(old)).added == 0)
+        check(vault.all().size == before + 1 && vault.read(live.id) == live)
+        val removed = vault.create("# Removed locally", false)
+        vault.remove(listOf(removed.id))
+        check(vault.restoreFolderNotes(listOf(removed)).added == 1)
+        check(vault.restoreFolderNotes(listOf(removed)).added == 0)
+        check(vault.all().none { it.id == removed.id })
+        return "Recovery-ok"
     }
 
     override fun onStart() {
@@ -304,6 +339,7 @@ class SmokeRunner : Instrumentation() {
             if (args.containsKey("syncGateFixture")) return@runCatching syncGateFixture()
             if (args.containsKey("incrementalFixture")) return@runCatching incrementalFixture()
             if (args.containsKey("knowledgeFixture")) return@runCatching knowledgeFixture()
+            if (args.containsKey("recoveryFixture")) return@runCatching recoveryFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)

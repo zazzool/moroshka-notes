@@ -9,9 +9,8 @@ export class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status }
 }
 export const digest = text => createHash('sha256').update(text).digest('hex')
-export function titleOf(text) {
-  return text.match(/^#\s+(.+)$/m)?.[1].trim() || 'Без названия'
-}
+import { titleOf } from '../web/markdown.mjs'
+export { titleOf }
 
 export function openVault(dir) {
   mkdirSync(dir, { recursive: true, mode: 0o700 })

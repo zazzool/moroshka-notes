@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <application android:label="Moroshka Notes" android:icon="@mipmap/moroshka_launcher" android:roundIcon="@mipmap/moroshka_launcher" android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@style/MoroshkaTheme">
+    <application android:label="@string/moroshka_app_name" android:icon="@mipmap/moroshka_launcher" android:roundIcon="@mipmap/moroshka_launcher" android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@style/MoroshkaTheme">
         <service android:name=".BackgroundSyncJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true"/>
         <activity android:name=".MainActivity" android:launchMode="singleTask" android:configChanges="orientation|screenSize|keyboardHidden" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>

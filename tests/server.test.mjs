@@ -49,10 +49,12 @@ test('scoped keys, read-only Actions, OpenAPI and selected-note AI request',asyn
   assert.equal((await read.json()).text,'# Test\nHello')
   assert.equal((await api('/actions/notes/'+id,'PUT',{text:'edited'},actionsToken)).status,404)
   assert.equal((await (await api('/openapi.json')).json()).servers[0].url,'https://notes.example.org')
-  const summary=await (await api('/api/summary','POST',{id,revision:digest('# Test\nHello')})).json()
+  const summary=await (await api('/api/summary','POST',{id,revision:digest('# Test\nHello'),consent:true})).json()
   assert.equal(summary.summary,'Пересказ')
   assert.equal(outgoing.length,1)
   assert.equal(outgoing[0].body.messages[1].content,'# Test\nHello')
+  assert.equal(outgoing[0].body.provider.data_collection,'deny')
+  assert.equal(outgoing[0].body.provider.zdr,true)
 })
 test('invalid writes, oversized note, missing configuration and anonymous shell',async t => {
   const {api}=await fixture(t)

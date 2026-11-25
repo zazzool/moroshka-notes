@@ -1,12 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync,rmSync,readFileSync,writeFileSync } from 'node:fs'
+import { mkdtempSync,rmSync,readFileSync,writeFileSync,existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { request as httpRequest } from 'node:http'
 import { application } from '../server/app.mjs'
 import { digest } from '../server/vault.mjs'
 import { applyProposal,appendLink } from '../web/knowledge.mjs'
+import { titleOf, tagsOf, linksOf, scan, renameHeading } from '../web/markdown.mjs'
 
 async function fixture(t){
   const dir=mkdtempSync(join(tmpdir(),'moroshka-knowledge-'))
@@ -23,9 +25,25 @@ async function fixture(t){
   await new Promise(r=>server.listen(0,'127.0.0.1',r))
   t.after(async()=>{await new Promise(r=>server.close(r));rmSync(dir,{recursive:true,force:true})})
   const origin='http://127.0.0.1:'+server.address().port
-  const api=(path,method='GET',body,key=token,headers={})=>fetch(origin+path,{method,
-    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json',...headers},
-    body:body===undefined?undefined:JSON.stringify(body)})
+  const api=(path,method='GET',body,key=token,headers={})=>{
+    const data=body===undefined?undefined:JSON.stringify(body)
+    if(path!=='/mcp')return fetch(origin+path,{method,headers:{Authorization:'Bearer '+key,'Content-Type':'application/json',...headers},body:data})
+    // Native HTTP request preserves the exact authority under test; fetch may
+    // normalize Host to the local fixture URL.
+    return new Promise((resolve,reject)=>{
+      const req=httpRequest(origin+path,{method,headers:{Authorization:'Bearer '+key,
+        'Content-Type':'application/json',Host:'notes.example.org',...headers,
+        ...(data===undefined?{}:{'Content-Length':Buffer.byteLength(data)})}},res=>{
+        const chunks=[]
+        res.on('data',chunk=>chunks.push(chunk))
+        res.on('error',reject)
+        res.on('end',()=>resolve(new Response(res.statusCode===202||res.statusCode===204?null:Buffer.concat(chunks),
+          {status:res.statusCode,headers:res.headers})))
+      })
+      req.on('error',reject)
+      req.end(data)
+    })
+  }
   async function add(text,id=randomUUID(),base=null){
     const res=await api('/api/notes/'+id,'PUT',{text,base});assert.equal(res.status,200);return res.json()
   }
@@ -42,6 +60,7 @@ test('AI proposals are explicit, validated, revision pinned and never mutate Mar
   const result=await (await api('/api/ai/analyze','POST',{...input,consent:true})).json()
   assert.deepEqual(result,{...input,title:'Предложение',category:'idea',tags:['сон','исследование'],truncated:false})
   assert.equal(calls[0].body.messages[1].content,n.text)
+  assert.deepEqual(calls[0].body.provider,{require_parameters:true,data_collection:'deny',zdr:true})
   assert.equal((await (await api('/api/notes')).json()).notes[0].text,n.text)
   setOverride(()=>Response.json({choices:[{message:{content:'{"title":"bad","category":"bad","tags":[]}'}}]}))
   assert.equal((await api('/api/ai/analyze','POST',{...input,consent:true})).status,502)
@@ -60,6 +79,7 @@ test('semantic index requires consent, reuses exact revisions and hides stale/de
   const status=await (await api('/api/ai/index','POST',{notes:requested,consent:true})).json()
   assert.equal(status.indexed,3)
   assert.equal(calls.length,1)
+  assert.deepEqual(calls[0].body.provider,{data_collection:'deny',zdr:true})
   assert.equal((await api('/api/ai/index','POST',{notes:requested,consent:true})).status,200)
   assert.equal(calls.length,1)
   const result=await (await api('/api/ai/search','POST',{query:'сон',consent:true})).json()
@@ -70,6 +90,8 @@ test('semantic index requires consent, reuses exact revisions and hides stale/de
   assert.equal(calls.length,2)
   await add('# Садовая работа',b.id,b.revision)
   assert.equal((await api('/api/notes/'+c.id,'DELETE',{base:c.revision})).status,200)
+  assert.equal(existsSync(join(dir,'semantic-v1',b.id+'.json')),false)
+  assert.equal(existsSync(join(dir,'semantic-v1',c.id+'.json')),false)
   assert.equal((await (await api('/api/ai/status')).json()).indexed,1)
   assert.deepEqual((await (await api('/api/ai/related','POST',{id:a.id,revision:a.revision})).json()).notes,[])
   assert.equal((await api('/api/ai/index','POST',{notes:[requested[1]],consent:true})).status,409)
@@ -85,6 +107,8 @@ test('MCP modern and legacy read-only tools have an independent bearer scope',as
   for(const key of [token,actionsToken,'wrong'])assert.equal((await send('tools/list',{}, {},key)).status,401)
   assert.equal((await api('/api/notes','GET',undefined,mcpToken)).status,401)
   assert.equal((await send('tools/list',{}, {Origin:'https://evil.invalid'})).status,403)
+  assert.equal((await send('tools/list',{}, {Host:'evil.invalid'})).status,403)
+  assert.equal((await send('tools/list',{}, {Origin:'https://notes.example.org/evil'})).status,403)
   const init=await (await send('initialize',{protocolVersion:'2025-11-25'})).json()
   assert.equal(init.result.protocolVersion,'2025-11-25')
   const list=await (await send('tools/list')).json()
@@ -124,4 +148,44 @@ test('accept only explicit metadata; preserve the original source and reject amb
   assert.throws(()=>appendLink(original,'same',['Same','same'],[]))
   assert.equal(appendLink(original,'Target',['Target'],[]),'[[Target]]\n\n'+original)
   assert.equal(appendLink(original,'Target',['Target'],['target']),original)
+})
+
+
+test('metadata scanner protects long fences, invalid closing markers, inline code and code examples',()=>{
+  const ticks=String.fromCharCode(96)
+  const source=[ticks.repeat(4)+'js','# Fake','#type-task [[Fake]]','- [ ] Fake',ticks.repeat(3),
+    ticks.repeat(4)+'not a closing fence','# Still fake',ticks.repeat(4),
+    '# Real','Body '+ticks+'#fake [[Fake]]'+ticks+' #real [[Target]]','## Section',
+    '    # Indented','    #fake [[Fake]]','- [ ] Real task','#type-task'].join('\n')
+  assert.equal(titleOf(source),'Real')
+  assert.deepEqual(tagsOf(source),['real','type-task'])
+  assert.deepEqual(linksOf(source),['Target'])
+  assert.deepEqual(scan(source).prose.filter(x=>x.line.startsWith('- [ ]')).map(x=>x.line),['- [ ] Real task'])
+  const changed=applyProposal(source,{title:'New $&',category:'idea',tags:['REAL','new']})
+  assert.equal(titleOf(changed),'New $&')
+  assert.ok(changed.includes('#type-task [[Fake]]'))
+  assert.deepEqual(tagsOf(changed),['real','new','type-idea'])
+  assert.equal(renameHeading('#\nNot a heading','Title'),'# Title\n\n#\nNot a heading')
+  const open=ticks.repeat(4)+'\n# code\n'+ticks.repeat(3)+'\n'
+  assert.equal(applyProposal(open,{tags:['tag']}),'#tag\n\n'+open)
+})
+
+
+test('summary requires explicit consent and uses the same privacy routing and bounded content',async t=>{
+  const {api,add,calls,setOverride}=await fixture(t)
+  const n=await add('# Long\n'+'🧠'.repeat(13000))
+  const input={id:n.id,revision:n.revision}
+  assert.equal((await api('/api/summary','POST',input)).status,400)
+  assert.equal(calls.length,0)
+  setOverride(()=>Response.json({choices:[{message:{content:'Short summary'}}]}))
+  const summary=await (await api('/api/summary','POST',{...input,consent:true})).json()
+  assert.deepEqual(summary,{summary:'Short summary',truncated:true})
+  assert.equal(Array.from(calls[0].body.messages[1].content).length,12000)
+  assert.deepEqual(calls[0].body.provider,{data_collection:'deny',zdr:true})
+  setOverride(()=>new Response('x'.repeat(4*1024*1024+1)))
+  assert.equal((await api('/api/summary','POST',{...input,consent:true})).status,502)
+  setOverride(()=>Response.json({choices:[{message:{content:''}}]}))
+  assert.equal((await api('/api/summary','POST',{...input,consent:true})).status,502)
+  const current=(await (await api('/api/notes')).json()).notes[0]
+  assert.equal(current.text,n.text)
 })
