@@ -344,6 +344,8 @@ def photo_check(origin, browser):
     expect(page.locator("#note-photos .photo-tile")).to_have_count(1)
     expect(page.get_by_label("Markdown")).to_have_value("# Контекст фотографии\n\nКонтекст фотографии")
     expect(page.locator("#recognize-photo")).to_be_visible()
+    assert page.locator("#recognize-photo").bounding_box()["y"] + page.locator("#recognize-photo").bounding_box()["height"] <= 840
+    page.wait_for_function("document.querySelector('#note-photos img')?.naturalWidth > 0")
     Path("ux-artifacts").mkdir(exist_ok=True)
     page.screenshot(path="ux-artifacts/mobile-photo-editor.png")
     page.get_by_label("Markdown").fill("# Фото\n\nТекст рядом с изображением")

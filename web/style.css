@@ -185,3 +185,13 @@ h1{font-size:24px;margin:12px 0 8px}
   #feed h1{font-size:20px;margin:4px 0}
   #feed header{padding-bottom:4px}
 }
+
+/* Keep attachment controls in reach on compact editor screens. */
+@media(max-width:680px){
+  #reader label[for="body"]{margin:10px 0 6px}
+  #reader:has(#note-photos:not([hidden])) #body{min-height:120px;height:clamp(120px,calc(100dvh - 560px),40dvh)}
+  #reader .editorActions:has(#add-photo){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;justify-content:stretch}
+  #reader .editorActions:has(#add-photo) #saved{grid-column:1/-1}
+  #reader .editorActions:has(#add-photo) button{padding:8px;font-size:13px;min-width:0}
+  #reader .editorActions:has(#add-photo) #recognize-photo[hidden]{display:none}
+}
