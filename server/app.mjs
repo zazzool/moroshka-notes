@@ -67,7 +67,18 @@ export function application(options, request = fetch) {
     try {
       const actual = new URL(origin)
       const expected = publicUrl ? new URL(publicUrl) : null
+      if (origin !== actual.origin || !['http:','https:'].includes(actual.protocol)) return false
       return expected ? actual.origin === expected.origin : actual.host === req.headers.host
+    } catch { return false }
+  }
+  function validMcpHost(req) {
+    const authority = req.headers.host
+    if (typeof authority !== 'string' || !authority || /[\s/@?#\\]/.test(authority)) return false
+    try {
+      const expected = publicUrl ? new URL(publicUrl) : null
+      const actual = new URL((expected?.protocol || 'http:') + '//' + authority)
+      return expected ? actual.host === expected.host :
+        ['localhost','127.0.0.1','[::1]'].includes(actual.hostname)
     } catch { return false }
   }
   function requireKey(req, key) {
@@ -132,7 +143,7 @@ export function application(options, request = fetch) {
       }
       if (pathname === '/mcp') {
         if (!mcpToken) throw new ApiError(404,'MCP не настроен')
-        if (!sameOrigin(req)) throw new ApiError(403,'Origin отклонён')
+        if (!validMcpHost(req) || !sameOrigin(req)) throw new ApiError(403,'Host или Origin отклонён')
         requireKey(req,mcpToken)
         if (req.method !== 'POST') {res.setHeader('Allow','POST');res.writeHead(405);return res.end()}
         if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type']||''))throw new ApiError(415,'Ожидается JSON')

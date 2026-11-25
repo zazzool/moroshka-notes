@@ -11,15 +11,21 @@ android {
         testInstrumentationRunner = "app.moroshka.notes.SmokeRunner"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.1.0-alpha.9"
+        versionCode = 10
+        versionName = "0.1.0-alpha.10"
+        resValue("string", "moroshka_app_name", "Морошка")
     }
     buildTypes {
-        getByName("debug") { applicationIdSuffix = ".debug" }
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            resValue("string", "moroshka_app_name", "Морошка Debug")
+        }
         create("preview") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".preview"
             versionNameSuffix = "-preview"
+            isDebuggable = false
+            resValue("string", "moroshka_app_name", "Морошка Preview")
             matchingFallbacks += listOf("debug")
         }
     }

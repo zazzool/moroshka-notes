@@ -25,7 +25,7 @@ async function fixture(t){
   t.after(async()=>{await new Promise(r=>server.close(r));rmSync(dir,{recursive:true,force:true})})
   const origin='http://127.0.0.1:'+server.address().port
   const api=(path,method='GET',body,key=token,headers={})=>fetch(origin+path,{method,
-    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json',...headers},
+    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json',...(path==='/mcp'?{Host:'notes.example.org'}:{}),...headers},
     body:body===undefined?undefined:JSON.stringify(body)})
   async function add(text,id=randomUUID(),base=null){
     const res=await api('/api/notes/'+id,'PUT',{text,base});assert.equal(res.status,200);return res.json()
@@ -90,6 +90,8 @@ test('MCP modern and legacy read-only tools have an independent bearer scope',as
   for(const key of [token,actionsToken,'wrong'])assert.equal((await send('tools/list',{}, {},key)).status,401)
   assert.equal((await api('/api/notes','GET',undefined,mcpToken)).status,401)
   assert.equal((await send('tools/list',{}, {Origin:'https://evil.invalid'})).status,403)
+  assert.equal((await send('tools/list',{}, {Host:'evil.invalid'})).status,403)
+  assert.equal((await send('tools/list',{}, {Origin:'https://notes.example.org/evil'})).status,403)
   const init=await (await send('initialize',{protocolVersion:'2025-11-25'})).json()
   assert.equal(init.result.protocolVersion,'2025-11-25')
   const list=await (await send('tools/list')).json()
