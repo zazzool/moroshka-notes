@@ -10,8 +10,8 @@ import java.util.UUID
 import javax.net.ssl.HttpsURLConnection
 
 data class Note(val id: String, val text: String) {
-    val title: String get() = Regex("(?m)^#\\s+(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: "Без названия"
-    val links: List<String> get() = Regex("\\[\\[([^]\\n]+)]]").findAll(text).map { it.groupValues[1].trim() }.toList()
+    val title: String get() = MarkdownMetadata.title(text)
+    val links: List<String> get() = MarkdownMetadata.links(text)
 }
 
 class Vault(context: Context) {

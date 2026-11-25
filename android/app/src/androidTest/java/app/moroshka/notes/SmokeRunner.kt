@@ -292,6 +292,20 @@ class SmokeRunner : Instrumentation() {
         check(runCatching{KnowledgeApi.metadata(text,"bad\nheading",emptyList(),null)}.isFailure)
         check(runCatching{KnowledgeApi.link(text,"Same",listOf("same","Same"),emptyList())}.isFailure)
         check(KnowledgeApi.link(text,"Target",listOf("Target"),emptyList())=="[[Target]]\n\n"+text)
+        val ticks = "\u0060"
+        val example = listOf(ticks.repeat(4)+"js","# Fake","#type-task [[Fake]]","- [ ] Fake",
+            ticks.repeat(3),ticks.repeat(4)+"not closing","# Still fake",ticks.repeat(4),
+            "# Real","Body "+ticks+"#fake [[Fake]]"+ticks+" #real [[Target]]",
+            "    #fake [[Fake]]","- [ ] Real task","#type-task").joinToString("\n")
+        check(MarkdownMetadata.title(example)=="Real")
+        check(MarkdownMetadata.links(example)==listOf("Target"))
+        check(MarkdownMetadata.tags(example)==listOf("real","type-task"))
+        check(MarkdownMetadata.proseLines(example).filter{it.second.startsWith("- [ ]")}.size==1)
+        val changedExample=KnowledgeApi.metadata(example,"New",listOf("REAL","new"),"idea")
+        check(MarkdownMetadata.title(changedExample)=="New")
+        check(changedExample.contains("#type-task [[Fake]]"))
+        check(MarkdownMetadata.tags(changedExample)==listOf("real","new","type-idea"))
+        check(MarkdownMetadata.removeLink(example,"Target").contains(ticks+"#fake [[Fake]]"+ticks))
         return "Knowledge-metadata-ok"
     }
 

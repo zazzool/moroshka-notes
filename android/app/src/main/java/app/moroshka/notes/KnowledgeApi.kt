@@ -47,21 +47,17 @@ internal class KnowledgeApi(private val server: String, private val key: String)
             require(tags.size <= 8 && tags.all { validTag.matches(it) })
             require(category == null || category in labels)
             var updated = if (heading == null) text else MarkdownMetadata.rename(text,heading)
-            // Prefix metadata when a code fence is left open, preserving source text.
-            var fence: String? = null
-            for (line in text.lines()) {
-                val marker = Regex("^(?:\u0060{3,}|~{3,})").find(line.trimStart())?.value ?: continue
-                val open = fence
-                if (open == null) fence = marker
-                else if (marker.first() == open.first() && marker.length >= open.length) fence = null
+            if(category!=null){
+                val managed=labels.keys.map{"type-"+it}.toSet()
+                updated=MarkdownMetadata.removeMatching(updated) {
+                    val name=it.lowercase(java.util.Locale.ROOT)
+                    name in managed && name!="type-"+category
+                }
             }
-            val existing = MarkdownMetadata.tags(text).map { it.lowercase(java.util.Locale.ROOT) }.toMutableSet()
-            val added = (tags + listOfNotNull(category?.let { "type-" + it })).filter {
-                existing.add(it.lowercase(java.util.Locale.ROOT))
+            val accepted=if(category==null)tags else tags.filter{
+                it.lowercase(java.util.Locale.ROOT) !in labels.keys.map { name -> "type-"+name }
             }
-            if (fence != null && added.isNotEmpty()) {
-                updated = added.joinToString(" ") { "#" + it } + "\n\n" + updated
-            } else for (tag in added) updated = MarkdownMetadata.add(updated, tag)
+            updated=MarkdownMetadata.addAll(updated,accepted+listOfNotNull(category?.let{"type-"+it}))
             require(updated.toByteArray(Charsets.UTF_8).size <= 512 * 1024) { "Предел одной заметки — 512 КиБ" }
             return updated
         }
@@ -69,7 +65,9 @@ internal class KnowledgeApi(private val server: String, private val key: String)
             require(target.isNotBlank() && target.none { it == '[' || it == ']' || it.code < 32 }) { "Название нельзя использовать в вики-ссылке" }
             require(titles.count { it.trim().equals(target.trim(),true) } == 1) { "Название неоднозначно; сначала переименуйте заметку" }
             if (existing.any { it.trim().equals(target.trim(),true) }) return text
-            return "[[" + target + "]]\n\n" + text
+            val result = "[[" + target + "]]\n\n" + text
+            require(result.toByteArray(Charsets.UTF_8).size <= 512 * 1024) { "Предел одной заметки — 512 КиБ" }
+            return result
         }
     }
 }

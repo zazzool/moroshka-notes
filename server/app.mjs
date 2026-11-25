@@ -11,6 +11,7 @@ const assets = new Map([
   ['/backup.mjs', ['backup.mjs', 'text/javascript']],
   ['/sync-pull.mjs', ['sync-pull.mjs', 'text/javascript']],
   ['/knowledge.mjs', ['knowledge.mjs', 'text/javascript']],
+  ['/markdown.mjs', ['markdown.mjs', 'text/javascript']],
   ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
   ['/assets/cloudberry.webp', ['assets/cloudberry.webp', 'image/webp']],
   ['/assets/hero-day.webp', ['assets/hero-day.webp', 'image/webp']],

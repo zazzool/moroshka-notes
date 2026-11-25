@@ -1,6 +1,7 @@
 import { encodeArchive, decodeArchive, planRestore, maxArchiveBytes } from '/backup.mjs'
 import { pullSnapshot } from '/sync-pull.mjs'
 import { applyProposal, appendLink, categoryLabels } from '/knowledge.mjs'
+import { titleOf, linksOf, tagsOf, scan } from '/markdown.mjs'
 
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
@@ -19,8 +20,8 @@ let activePairing = null
 let archiveGeneration = 0
 let archiveText = null
 let archiveSourceId = null
-const title = n => n.text.match(/^#\s+(.+)$/m)?.[1].trim() || 'Без названия'
-const links = text => [...text.matchAll(/\[\[([^\]\n]+)\]\]/g)].map(m => m[1].trim())
+const title = n => titleOf(n.text)
+const links = linksOf
 const norm = text => text.trim().toLocaleLowerCase()
 function put(note) {
   if (new Blob([note.text]).size > 512 * 1024) throw Error('Предел одной заметки — 512 КиБ')
@@ -73,21 +74,6 @@ function related() {
     group.append(block)
   }
 }
-function tagsOf(text) {
-  const tags = new Set()
-  let fence = null
-  for (const line of text.split('\n')) {
-    const marker = line.trimStart().match(/^(\x60{3,}|~{3,})/)?.[1]
-    if (marker) {
-      if (!fence) fence = marker
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null
-      continue
-    }
-    if (fence || /^\s*#\s/.test(line)) continue
-    for (const match of line.matchAll(/(?<!\S)#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,39})(?![\p{L}\p{N}_-])/gu)) tags.add(match[1])
-  }
-  return [...tags]
-}
 function render() {
   $('capture').hidden = view !== 'notes'
   const list = $('items'); list.replaceChildren()
@@ -104,14 +90,14 @@ function render() {
       const tags = tagsOf(n.text)
       if (tags.length) {
         const group = el('span','','note-tags')
-        for (const tag of tags.slice(0,5)) group.append(el('span','#'+tag,'chip'))
+        for (const tag of tags.slice(0,5)) group.append(el('span',tag.startsWith('type-')&&categoryLabels[tag.slice(5)]?categoryLabels[tag.slice(5)]:'#'+tag,'chip'))
         if (tags.length > 5) group.append(el('span','+'+(tags.length-5),'chip'))
         body.append(group)
       }
       b.append(symbol,body)
       list.append(b); count++
     } else {
-      n.text.split('\n').forEach((line,i) => {
+      scan(n.text).prose.forEach(({line,index:i}) => {
         const m = line.match(/^\s*[-*] \[([ xX])\] (.+)/); if (!m) return
         const row = el('div','','task'); const check = el('input',''); check.type = 'checkbox'; check.checked = m[1] !== ' '
         check.setAttribute('aria-label', m[2])

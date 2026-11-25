@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { application } from '../server/app.mjs'
 import { digest } from '../server/vault.mjs'
 import { applyProposal,appendLink } from '../web/knowledge.mjs'
+import { titleOf, tagsOf, linksOf, scan, renameHeading } from '../web/markdown.mjs'
 
 async function fixture(t){
   const dir=mkdtempSync(join(tmpdir(),'moroshka-knowledge-'))
@@ -124,4 +125,24 @@ test('accept only explicit metadata; preserve the original source and reject amb
   assert.throws(()=>appendLink(original,'same',['Same','same'],[]))
   assert.equal(appendLink(original,'Target',['Target'],[]),'[[Target]]\n\n'+original)
   assert.equal(appendLink(original,'Target',['Target'],['target']),original)
+})
+
+
+test('metadata scanner protects long fences, invalid closing markers, inline code and code examples',()=>{
+  const ticks=String.fromCharCode(96)
+  const source=[ticks.repeat(4)+'js','# Fake','#type-task [[Fake]]','- [ ] Fake',ticks.repeat(3),
+    ticks.repeat(4)+'not a closing fence','# Still fake',ticks.repeat(4),
+    '# Real','Body '+ticks+'#fake [[Fake]]'+ticks+' #real [[Target]]','## Section',
+    '    # Indented','    #fake [[Fake]]','- [ ] Real task','#type-task'].join('\n')
+  assert.equal(titleOf(source),'Real')
+  assert.deepEqual(tagsOf(source),['real','type-task'])
+  assert.deepEqual(linksOf(source),['Target'])
+  assert.deepEqual(scan(source).prose.filter(x=>x.line.startsWith('- [ ]')).map(x=>x.line),['- [ ] Real task'])
+  const changed=applyProposal(source,{title:'New $&',category:'idea',tags:['REAL','new']})
+  assert.equal(titleOf(changed),'New $&')
+  assert.ok(changed.includes('#type-task [[Fake]]'))
+  assert.deepEqual(tagsOf(changed),['real','new','type-idea'])
+  assert.equal(renameHeading('#\nNot a heading','Title'),'# Title\n\n#\nNot a heading')
+  const open=ticks.repeat(4)+'\n# code\n'+ticks.repeat(3)+'\n'
+  assert.equal(applyProposal(open,{tags:['tag']}),'#tag\n\n'+open)
 })
