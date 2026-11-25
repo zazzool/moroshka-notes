@@ -85,7 +85,10 @@ class SmokeRunner : Instrumentation() {
 
             runOnMainSync {
                 val root = activity.window.decorView
-                check(find(root) { it.tag == "homeHero" } != null)
+                check(find(root) { it.tag == "homeHero" } == null)
+                val capture=requireNotNull(find(root){it.tag=="bottomCapture"})
+                val pos=IntArray(2);capture.getLocationOnScreen(pos)
+                check(pos[1]>=root.height/2){"Capture must be in the lower half"}
                 val field = find(root) { it is EditText && it.contentDescription == "Текст новой заметки" } as EditText
                 field.setText(fixture)
                 val resultMethod = activity.javaClass.getDeclaredMethod("onActivityResult", Int::class.javaPrimitiveType,
@@ -100,9 +103,8 @@ class SmokeRunner : Instrumentation() {
                 updated.setText(fixture + " [[" + target.title + "]] #тест")
                 val save = find(activity.window.decorView) { it is Button && it.text.toString() == "Сохранить" } as Button
                 check(save.performClick())
-                val editor = requireNotNull(findEditor(activity.window.decorView))
-                check(editor.text.toString().contains(fixture))
-                activity.onBackPressed()
+                check(find(activity.window.decorView){it.tag=="bottomCapture"}!=null)
+                check(find(activity.window.decorView){it.contentDescription?.toString()?.contains(fixture)==true}!=null)
             }
             created = Vault(targetContext).all().single { it.title.startsWith(fixture) }
             runOnMainSync {
@@ -111,7 +113,7 @@ class SmokeRunner : Instrumentation() {
                 check(search.performClick())
                 val input = find(activity.window.decorView) { it is EditText && it.contentDescription == "Поиск по заметкам" } as EditText
                 input.setText(fixture)
-                check(find(activity.window.decorView) { it.contentDescription?.toString()?.startsWith(created!!.title) == true } != null)
+                check(find(activity.window.decorView) { it.contentDescription?.toString()?.contains(created!!.title) == true } != null)
                 val links = find(activity.window.decorView) { it is Button && it.text.toString() == "Связи" } as Button
                 check(links.performClick())
                 check(find(activity.window.decorView) { it is KnowledgeGraph } != null)
@@ -330,6 +332,39 @@ class SmokeRunner : Instrumentation() {
         return "Recovery-ok"
     }
 
+    private fun photoFixture():String {
+        val vault=Vault(targetContext)
+        val bitmap=android.graphics.Bitmap.createBitmap(120,80,android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.WHITE)
+        val output=java.io.ByteArrayOutputStream()
+        check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output))
+        bitmap.recycle()
+        val id=vault.photos.importBytes(output.toByteArray())
+        val bytes=requireNotNull(vault.photos.read(id))
+        PhotoStore.verify(id,bytes)
+        val original="# Фото\n\nОписание"
+        val text=PhotoStore.append(original,id)
+        check(PhotoStore.refs(text)==listOf(id) && PhotoStore.strip(text)==original)
+        val note=vault.create(text,false)
+        val archive=BackupArchive.encode(listOf(note),vault.photos::read)
+        val decoded=BackupArchive.decodeBundle(archive)
+        check(decoded.notes.single().note==note&&decoded.images.getValue(id).contentEquals(bytes))
+        check(vault.restoreArchive(archive).skipped==1)
+        val activity=startActivitySync(Intent(targetContext,MainActivity::class.java)
+            .setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        waitForIdleSync()
+        runOnMainSync{
+            val editor=requireNotNull(findEditor(activity.window.decorView))
+            check(editor.text.toString()==original)
+            check(find(activity.window.decorView){it.contentDescription=="Открыть фотографию"}!=null)
+            editor.setText(original+"\n\nПравка")
+            activity.onBackPressed()
+            activity.finish()
+        }
+        check(vault.all().any{PhotoStore.strip(it.text).endsWith("Правка")&&id in PhotoStore.refs(it.text)})
+        return "Photo-capture-storage-archive-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
@@ -339,6 +374,7 @@ class SmokeRunner : Instrumentation() {
             if (args.containsKey("syncGateFixture")) return@runCatching syncGateFixture()
             if (args.containsKey("incrementalFixture")) return@runCatching incrementalFixture()
             if (args.containsKey("knowledgeFixture")) return@runCatching knowledgeFixture()
+            if (args.containsKey("photoFixture")) return@runCatching photoFixture()
             if (args.containsKey("recoveryFixture")) return@runCatching recoveryFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"

@@ -26,13 +26,13 @@ export async function pullSnapshot(api, knownBases, checkpoint = ()=>{}) {
       throw invalid()
     ids.add(item.id)
   }
-  const entries = new Map(manifest.notes.map(({id,revision})=>[id,{id,revision}]))
+  const entries = new Map(manifest.notes.map(({id,revision,modifiedAt})=>[id,{id,revision,...(Number.isSafeInteger(modifiedAt)&&modifiedAt>0?{modifiedAt}:{})}]))
   const wanted = [...entries.values()].filter(n=>knownBases.get(n.id)!==n.revision)
   for(let i=0;i<wanted.length;i+=8) {
     checkpoint()
     const batch = wanted.slice(i,i+8)
     const expected = new Map(batch.map(n=>[n.id,n.revision]))
-    const response = await api('/api/sync/read','POST',{notes:batch})
+    const response = await api('/api/sync/read','POST',{notes:batch.map(({id,revision})=>({id,revision}))})
     checkpoint()
     if (!Array.isArray(response?.notes) || response.notes.length!==batch.length) throw invalid()
     for (const note of response.notes) {
@@ -41,7 +41,7 @@ export async function pullSnapshot(api, knownBases, checkpoint = ()=>{}) {
           await digest(note.text)!==note.revision) throw invalid()
       checkpoint()
       expected.delete(note.id)
-      entries.set(note.id,{id:note.id,revision:note.revision,text:note.text})
+      entries.set(note.id,{...entries.get(note.id),text:note.text})
     }
     if (expected.size) throw invalid()
   }

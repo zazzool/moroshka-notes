@@ -43,6 +43,10 @@ class MainActivity : Activity() {
     private val design by lazy { Design(this) }
     private val drafts by lazy { getSharedPreferences("capture_draft", MODE_PRIVATE) }
     private var captureDraft = ""
+    private var photoTarget: String? = null
+    private var editorImages = emptyList<String>()
+    private var feedLimit = 40
+    private val photoWorker = Executors.newFixedThreadPool(2)
     private var page = "home"
     private var search = ""
     private var tasks = false
@@ -68,6 +72,7 @@ class MainActivity : Activity() {
             View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         setContentView(root)
         exportId = state?.getString("export")
+        photoTarget = state?.getString("photoTarget")
         val restore = state?.getString("note")
         if (restore != null) edit(vault.read(restore)) else library()
         if (state == null) receive(intent)
@@ -88,7 +93,7 @@ class MainActivity : Activity() {
             else {
                 val fresh = vault.all().firstOrNull { it.id == id }
                 if (fresh == null) library()
-                else if (fresh.text != editor?.text.toString()) edit(fresh)
+                else if (PhotoStore.strip(fresh.text) != editor?.text.toString() || PhotoStore.refs(fresh.text) != editorImages) edit(fresh)
             }
         }
         wasStopped = false
@@ -107,7 +112,7 @@ class MainActivity : Activity() {
         }
     }
     override fun onSaveInstanceState(out: Bundle) {
-        super.onSaveInstanceState(out); out.putString("note", current); out.putString("export", exportId); out.putString("page", page)
+        super.onSaveInstanceState(out); out.putString("note", current); out.putString("export", exportId); out.putString("page", page); out.putString("photoTarget",photoTarget)
     }
     override fun onDestroy() {
         handler.removeCallbacks(autoSave)
@@ -118,6 +123,7 @@ class MainActivity : Activity() {
             runCatching { BackgroundSync.schedule(context) }
         }
         worker.shutdown()
+        photoWorker.shutdownNow()
         super.onDestroy()
     }
     @Deprecated("Activity back navigation")
@@ -212,21 +218,17 @@ class MainActivity : Activity() {
     }
     private fun flush() {
         handler.removeCallbacks(autoSave)
-        if (dirty) { vault.save(Note(requireNotNull(current), requireNotNull(editor).text.toString())); dirty = false }
+        if (dirty) { vault.save(Note(requireNotNull(current), PhotoStore.compose(requireNotNull(editor).text.toString(),editorImages))); dirty = false }
     }
     private fun library() {
         current = null
         editor = null
+        editorImages = emptyList()
         root.removeAllViews()
         val header = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        header.addView(ImageView(this).apply {
-            setImageResource(R.drawable.cloudberry)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(40), dp(40)))
         val largeText = resources.configuration.fontScale >= 1.3f
         header.addView(label("Морошка", if (largeText) 18f else 24f).apply {
-            setPadding(dp(10), 0, 0, 0)
+            setPadding(0, 0, 0, 0)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             contentDescription = "Морошка"
@@ -244,23 +246,24 @@ class MainActivity : Activity() {
 
         val content = column()
         val scroll = ScrollView(this).apply { clipToPadding = false; addView(content) }
-        root.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(16) })
+        root.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
         when (page) {
             "home" -> homeContent(content)
             "search" -> searchContent(content)
             "links" -> linksContent(content)
             else -> libraryContent(content)
         }
+        root.addView(capturePanel(), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
         val nav = column().apply {
             background = design.panel(design.surface, 20, true)
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
-        val items = listOf("home" to "Главная", "search" to "Поиск", "links" to "Связи", "library" to "Библиотека")
+        val items = listOf("home" to "Заметки", "search" to "Поиск", "links" to "Связи", "library" to "Задачи")
         val navRows = if (largeText) items.chunked(2) else listOf(items)
         for (itemsInRow in navRows) {
             val navRow = row()
             nav.addView(navRow, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-            for ((destination, name) in itemsInRow) navRow.addView(button(name) { page = destination; library() }.apply {
+            for ((destination, name) in itemsInRow) navRow.addView(button(name) { page = destination; if(destination=="library") tasks=true; library() }.apply {
                 textSize = 13f
                 setPadding(dp(2), dp(4), dp(2), dp(4))
                 minHeight = dp(48)
@@ -286,7 +289,7 @@ class MainActivity : Activity() {
             val keyboardOpen = !isInMultiWindowMode && screenHeight - visible.bottom > dp(160)
             val visibility = if (keyboardOpen) View.GONE else View.VISIBLE
             if (nav.visibility != visibility) nav.visibility = visibility
-            content.findViewWithTag<View>("homeHero")?.let { if (it.visibility != visibility) it.visibility = visibility }
+
         }
         val observer = nav.viewTreeObserver
         observer.addOnGlobalLayoutListener(layoutListener)
@@ -305,66 +308,63 @@ class MainActivity : Activity() {
     }
 
     private fun homeContent(content: LinearLayout) {
-        val heroHeight = if (resources.configuration.fontScale >= 1.3f) 144 else 112
-        content.addView(hero(), LinearLayout.LayoutParams(MATCH_PARENT, dp(heroHeight)).apply { bottomMargin = dp(12) })
-        val capture = column().apply {
-            background = design.composer()
-            setPadding(dp(16), dp(16), dp(16), dp(16))
+        val recent=vault.recent()
+        if(recent.isEmpty()){
+            content.addView(label("Здесь появятся ваши заметки. Запишите мысль или сделайте фото ниже.",16f).apply{setTextColor(muted)})
+        }else{
+            var previous=""
+            val date=java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
+            for(note in recent.take(feedLimit)){
+                val day=date.format(java.util.Date(vault.modifiedAt(note.id)))
+                if(day!=previous){
+                    content.addView(label(day,13f).apply{setTextColor(muted);setPadding(0,dp(12),0,dp(5))})
+                    previous=day
+                }
+                noteCard(content,note)
+            }
+            if(recent.size>feedLimit)content.addView(button("Показать ещё"){feedLimit+=40;library()})
         }
-        val field = EditText(this).apply {
-            hint = "О чём вы думаете?"
-            contentDescription = "Текст новой заметки"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            gravity = android.view.Gravity.TOP
-            textSize = 16f
-            typeface = design.regular
-            setTextColor(design.text)
-            setHintTextColor(design.muted)
-            background = design.panel(design.background, 12, true)
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            minLines = 3; maxLines = 7
+    }
+
+    private fun capturePanel():LinearLayout {
+        val capture=column().apply{
+            tag="bottomCapture"
+            background=design.panel(design.surface,12,true)
+            setPadding(dp(8),dp(6),dp(8),dp(6))
+        }
+        val field=EditText(this).apply{
+            hint="Записать мысль…"
+            contentDescription="Текст новой заметки"
+            inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            gravity=android.view.Gravity.TOP
+            textSize=16f;typeface=design.regular
+            setTextColor(design.text);setHintTextColor(design.muted)
+            background=design.panel(design.background,8)
+            setPadding(dp(10),dp(8),dp(10),dp(8))
+            minHeight=dp(48);minLines=1;maxLines=3
             setText(captureDraft)
         }
-        capture.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        changes(field) {
-            captureDraft = field.text.toString()
-            drafts.edit().putString("text", captureDraft).apply()
+        capture.addView(field,LinearLayout.LayoutParams(MATCH_PARENT,WRAP_CONTENT))
+        changes(field){
+            captureDraft=field.text.toString()
+            drafts.edit().putString("text",captureDraft).apply()
         }
-        val largeText = resources.configuration.fontScale >= 1.3f
-        val actions = (if (largeText) column() else row()).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        actions.addView(button("Голос") { voiceInput(5) }.apply { icon(R.drawable.icon_mic) },
-            if (largeText) LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT) else LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        actions.addView(button("Сохранить") { saveCapture() }.apply {
-            background = design.primary(); setTextColor(Color.WHITE)
-            icon(R.drawable.icon_check, Color.WHITE)
-        }, (if (largeText) LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
-            else LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) }))
-        capture.addView(actions, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
-        content.addView(capture)
-        if (!DocumentBackup(this).configured) {
-            content.addView(button("Выбрать папку для сохранения") {
-                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
-            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
-        }
-        if (settings.getString("url", "").isNullOrBlank()) {
-            content.addView(button("Подключить или развернуть сервер") {
-                AlertDialog.Builder(this).setItems(arrayOf("Развернуть свой сервер", "Подключить существующий")) { _, choice ->
-                    if (choice == 0) installServer() else connection()
-                }.show()
-            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
-        }
-        section(content, "Недавние")
-        val recent = vault.recent()
-        if (recent.isEmpty()) {
-            content.addView(decorative(R.drawable.illustration_ideas, 90), LinearLayout.LayoutParams(MATCH_PARENT, dp(90)).apply { bottomMargin = dp(8) })
-            content.addView(label("Здесь появится ваша первая заметка.", 16f).apply { setTextColor(muted) })
-        }
-        else {
-            recent.take(4).forEach { noteCard(content, it) }
-            content.addView(button("Все заметки") { page = "library"; tasks = false; library() },
-                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
-        }
+        val actions=row().apply{gravity=android.view.Gravity.CENTER_VERTICAL}
+        val large=resources.configuration.fontScale>=1.3f
+        actions.addView(button(if(large)"Фото" else "Фото"){choosePhoto(null)}.apply{
+            contentDescription="Добавить фотозаметку"
+            setPadding(dp(4),0,dp(4),0)
+        },LinearLayout.LayoutParams(0,WRAP_CONTENT,1f))
+        actions.addView(button("Голос"){voiceInput(5)}.apply{
+            contentDescription="Голосовая заметка"
+            setPadding(dp(4),0,dp(4),0)
+            if(!large)icon(R.drawable.icon_mic)
+        },LinearLayout.LayoutParams(0,WRAP_CONTENT,1f).apply{marginStart=dp(4)})
+        actions.addView(button("Сохранить"){saveCapture()}.apply{
+            background=design.primary();setTextColor(Color.WHITE);setPadding(dp(4),0,dp(4),0)
+        },LinearLayout.LayoutParams(0,WRAP_CONTENT,1.6f).apply{marginStart=dp(4)})
+        capture.addView(actions,LinearLayout.LayoutParams(MATCH_PARENT,WRAP_CONTENT).apply{topMargin=dp(4)})
+        return capture
     }
 
     private fun saveCapture() {
@@ -384,7 +384,7 @@ class MainActivity : Activity() {
         check(drafts.edit().remove("text").remove("id").commit()) { "Не удалось обновить черновик" }
         captureDraft = ""
         Toast.makeText(this, "Заметка сохранена", Toast.LENGTH_SHORT).show()
-        edit(vault.read(draftID))
+        page="home";library()
     }
 
     private fun searchContent(content: LinearLayout) {
@@ -407,8 +407,7 @@ class MainActivity : Activity() {
             results.removeAllViews()
             val matches = notes.filter { it.text.contains(search, ignoreCase = true) }
             if (matches.isEmpty()) {
-                results.addView(decorative(R.drawable.illustration_search, 112),
-                    LinearLayout.LayoutParams(MATCH_PARENT, dp(112)).apply { bottomMargin = dp(8) })
+
                 results.addView(label(if (search.isBlank()) "Заметок пока нет." else "Совпадений нет. Попробуйте другое слово.", 16f).apply { setTextColor(muted) })
             } else matches.forEach { noteCard(results, it) }
         }
@@ -417,15 +416,8 @@ class MainActivity : Activity() {
     }
 
     private fun libraryContent(content: LinearLayout) {
-        section(content, "Библиотека")
-        val controls = row()
-        controls.addView(button("Заметки") { tasks = false; library() }.apply {
-            background = design.panel(if (!tasks) design.tint else design.surface, 16, true)
-        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        controls.addView(button("Задачи") { tasks = true; library() }.apply {
-            background = design.panel(if (tasks) design.tint else design.surface, 16, true)
-        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
-        content.addView(controls)
+        section(content, "Задачи")
+        tasks=true
         val list = column()
         content.addView(list, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
         fun refresh() {
@@ -447,11 +439,15 @@ class MainActivity : Activity() {
                 }
             }
             if (list.childCount == 0) {
-                list.addView(decorative(if (tasks) R.drawable.illustration_balance else R.drawable.illustration_knowledge, 112), LinearLayout.LayoutParams(MATCH_PARENT, dp(112)).apply { bottomMargin = dp(8) })
+
                 list.addView(label(if (tasks) "Задач пока нет." else "Заметок пока нет.", 16f).apply { setTextColor(muted) })
             }
         }
         refresh()
+    }
+
+    private fun syncSettings() {
+        val content=column().apply{setPadding(dp(16),dp(8),dp(16),dp(8))}
         content.addView(button("Синхронизировать") {
             val url = settings.getString("url", "").orEmpty()
             val key = settings.getString("key", "").orEmpty()
@@ -475,13 +471,14 @@ class MainActivity : Activity() {
         })
         syncStatus.visibility = if (BackgroundSync.enabled(this)) View.VISIBLE else View.GONE
         content.addView(syncStatus)
+        AlertDialog.Builder(this).setTitle("Синхронизация").setView(content).setPositiveButton("Закрыть",null).show()
     }
 
     private fun noteCard(container: LinearLayout, note: Note) {
         val entry = column().apply {
-            background = design.panel(design.surface, 20, true)
+            background = design.panel(design.surface, 10, true)
             foreground = design.feedback()
-            setPadding(dp(16), dp(16), dp(16), dp(16))
+            setPadding(dp(12), dp(10), dp(12), dp(10))
             minimumHeight = dp(48); isFocusable = true
             setOnClickListener { edit(note) }
             setOnLongClickListener {
@@ -494,32 +491,34 @@ class MainActivity : Activity() {
                     }.show()
                 true
             }
-            val heading = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-            heading.addView(ImageView(this@MainActivity).apply {
-                setImageResource(R.drawable.icon_note)
-                imageTintList = ColorStateList.valueOf(design.secondary)
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
-                background = design.panel(design.tint, 12)
-                setPadding(dp(10), dp(10), dp(10), dp(10))
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
-            heading.addView(label(note.title, 18f).apply {
-                maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            addView(heading)
-            val preview = note.text.lines().filter { it.isNotBlank() && !it.startsWith("# ") }.joinToString(" ")
-            if (preview.isNotBlank()) addView(label(preview, 16f).apply {
-                setTextColor(muted); maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(0, dp(6), 0, 0)
+            val images=PhotoStore.refs(note.text)
+            val body=PhotoStore.preview(note.text)
+            val time=java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT)
+                .format(java.util.Date(vault.modifiedAt(note.id)))
+            val tags=MarkdownMetadata.tags(note.text)
+            val context=listOf(time,if(images.isNotEmpty())"Фото: "+images.size else "",
+                if(note.links.isNotEmpty())"Связей: "+note.links.distinct().size else "",
+                tags.take(3).joinToString("  "){tag->KnowledgeApi.labels[tag.removePrefix("type-")]?.takeIf{tag.startsWith("type-")} ?: "#"+tag})
+                .filter{it.isNotBlank()}.joinToString(" · ")
+            val line=row().apply{gravity=android.view.Gravity.TOP}
+            val words=column()
+            words.addView(label(body,16f).apply{
+                maxLines=4;ellipsize=android.text.TextUtils.TruncateAt.END
             })
-            val tags = MarkdownMetadata.tags(note.text)
-            contentDescription = listOf(note.title, preview, tags.joinToString(" ") { "#" + it })
-                .filter { it.isNotBlank() }.joinToString(". ")
-            if (tags.isNotEmpty()) addView(label(tags.joinToString("  ") { tag -> KnowledgeApi.labels[tag.removePrefix("type-")]?.takeIf { tag.startsWith("type-") } ?: "#$tag" }, 13f).apply {
-                setTextColor(design.secondary); setPadding(dp(10), dp(5), dp(10), dp(5)); maxLines = 2
-                background = design.panel(design.tint, 12)
-            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+            if(note.title!="Без названия" && note.title!=body && !body.startsWith(note.title+" ")){
+                words.addView(label(note.title,12f).apply{setTextColor(muted);maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END})
+            }
+            words.addView(label(context,12f).apply{
+                setTextColor(muted);maxLines=2;ellipsize=android.text.TextUtils.TruncateAt.END
+                setPadding(0,dp(5),0,0)
+            })
+            line.addView(words,LinearLayout.LayoutParams(0,WRAP_CONTENT,1f))
+            if(images.isNotEmpty()){
+                val image=thumbnail(images.first(),88)
+                line.addView(image,LinearLayout.LayoutParams(dp(72),dp(72)).apply{marginStart=dp(10)})
+            }
+            addView(line)
+            contentDescription=listOf(body,note.title,context).distinct().joinToString(". ")
         }
         container.addView(entry, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
     }
@@ -528,8 +527,7 @@ class MainActivity : Activity() {
         section(content, "Связи")
         val notes = vault.recent()
         if (notes.isEmpty()) {
-            content.addView(decorative(R.drawable.illustration_connections, 120),
-                LinearLayout.LayoutParams(MATCH_PARENT, dp(120)).apply { bottomMargin = dp(8) })
+
             content.addView(label("Создайте заметки и свяжите их, чтобы увидеть граф.", 16f).apply { setTextColor(muted) })
             return
         }
@@ -560,7 +558,7 @@ class MainActivity : Activity() {
         }
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива", "Корзина на устройстве")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива", "Корзина на устройстве", "Синхронизация")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
             else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
@@ -584,7 +582,8 @@ class MainActivity : Activity() {
                         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
                             .addCategory(Intent.CATEGORY_OPENABLE), 7)
                     }.show()
-            } else safely { showTrash() }
+            } else if(index==8) safely { showTrash() }
+            else safely { syncSettings() }
         }.show()
     }
 
@@ -661,7 +660,7 @@ class MainActivity : Activity() {
             }.show()
     }
     private fun edit(note: Note, selectTitle: Boolean = false) {
-        flush(); current = note.id; root.removeAllViews()
+        flush(); current = note.id; editorImages=PhotoStore.refs(note.text); root.removeAllViews()
         val bar = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }; root.addView(bar)
         bar.addView(button("Заметки") { flush(); library() }.apply { icon(R.drawable.icon_back) },
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
@@ -694,7 +693,7 @@ class MainActivity : Activity() {
         val field = EditText(this).apply {
             gravity = android.view.Gravity.TOP
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            typeface = design.regular; textSize = 16f; setText(note.text)
+            typeface = design.regular; textSize = 16f; setText(PhotoStore.strip(note.text))
             setTextColor(design.text)
             background = design.panel(design.surface, 20, true)
             setPadding(dp(16), dp(16), dp(16), dp(16)); setLineSpacing(dp(5).toFloat(), 1f)
@@ -702,13 +701,15 @@ class MainActivity : Activity() {
         }
         editor = field
         root.addView(field, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(16); bottomMargin = dp(8) })
-        if (selectTitle) { field.requestFocus(); field.setSelection(note.text.length) }
+        if (selectTitle) { field.requestFocus(); field.setSelection(field.text.length) }
+        if(editorImages.isNotEmpty())root.addView(photoStrip(note),LinearLayout.LayoutParams(MATCH_PARENT,WRAP_CONTENT))
         val tools = row()
         val toolScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(tools)
         }
         root.addView(toolScroll)
+        tools.addView(button("Фото"){choosePhoto(note.id)})
         tools.addView(button("＋ Связь") { insertLink() }.apply { icon(R.drawable.icon_link) })
         tools.addView(button("Теги") { manageTags() }.apply { icon(R.drawable.icon_tag) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         tools.addView(button("Граф") { flush(); showLocalGraph(vault.read(note.id)) }.apply { icon(R.drawable.icon_graph) },
@@ -717,8 +718,146 @@ class MainActivity : Activity() {
         tools.addView(button("Голос") { voiceInput() }.apply { icon(R.drawable.icon_mic) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         changes(field) { dirty = true; handler.removeCallbacks(autoSave); handler.postDelayed(autoSave, 350) }
     }
+    private fun thumbnail(id:String,size:Int):ImageView {
+        val view=ImageView(this).apply{
+            scaleType=ImageView.ScaleType.CENTER_CROP
+            background=design.panel(design.tint,8)
+            clipToOutline=true
+            contentDescription="Фотография"
+        }
+        photoWorker.execute{
+            val bitmap=runCatching{vault.photos.bitmap(id,size*2)}.getOrNull()
+            runOnUiThread{if(!isDestroyed && view.isAttachedToWindow && bitmap!=null)view.setImageBitmap(bitmap) else bitmap?.recycle()}
+        }
+        return view
+    }
+    private fun photoStrip(note:Note):HorizontalScrollView {
+        val items=row().apply{gravity=android.view.Gravity.CENTER_VERTICAL}
+        for(id in editorImages){
+            val view=thumbnail(id,76).apply{
+                isFocusable=true;isClickable=true;contentDescription="Открыть фотографию"
+                setOnClickListener{safely{showPhoto(id,note.id)}}
+            }
+            items.addView(view,LinearLayout.LayoutParams(dp(76),dp(76)).apply{marginEnd=dp(6)})
+        }
+        return HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(items)}
+    }
+    private fun cameraFile():java.io.File = java.io.File(cacheDir,"camera/capture.jpg")
+    private fun choosePhoto(target:String?) {
+        flush()
+        AlertDialog.Builder(this).setTitle(if(target==null)"Фотозаметка" else "Добавить изображение")
+            .setItems(arrayOf("Сделать фото","Выбрать изображение")){_,choice->safely{
+                photoTarget=target
+                if(choice==0){
+                    val file=cameraFile()
+                    file.parentFile?.mkdirs();file.delete()
+                    val uri=androidx.core.content.FileProvider.getUriForFile(this,packageName+".camera",file)
+                    val intent=Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+                        .putExtra(android.provider.MediaStore.EXTRA_OUTPUT,uri)
+                        .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    intent.clipData=android.content.ClipData.newRawUri("Photo",uri)
+                    startActivityForResult(intent,9)
+                }else startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*")
+                    .addCategory(Intent.CATEGORY_OPENABLE),8)
+            }}.setNegativeButton("Отмена",null).show()
+    }
+    private fun importPhoto(uri:android.net.Uri?,camera:Boolean) {
+        val target=photoTarget
+        photoTarget=null
+        val draft=captureDraft
+        flush()
+        syncing=true
+        val progress=AlertDialog.Builder(this).setMessage("Сохранение фотографии…").setCancelable(false).create()
+        progress.show()
+        worker.execute{
+            val result=runCatching{
+                val id=if(camera)cameraFile().inputStream().use{vault.photos.importBytes(PhotoStore.bounded(it,32*1024*1024))}
+                    else vault.photos.importUri(requireNotNull(uri))
+                if(target==null){
+                    val heading=draft.lineSequence().firstOrNull{it.isNotBlank()}?.trim()?.removePrefix("# ")?.take(80)?.trim().orEmpty().ifBlank{"Фотозаметка"}
+                    vault.create(PhotoStore.append("# "+heading+"\n\n"+draft,id))
+                }else{
+                    val note=vault.read(target)
+                    vault.save(note.copy(text=PhotoStore.append(note.text,id)))
+                }
+            }
+            if(camera&&result.isSuccess)cameraFile().delete()
+            runOnUiThread{
+                if(isDestroyed)return@runOnUiThread
+                syncing=false;progress.dismiss()
+                result.onSuccess{note->
+                    if(target==null){
+                        if(drafts.edit().remove("text").remove("id").commit())captureDraft=""
+                        page="home"
+                    }
+                    safely{edit(note)}
+                    Toast.makeText(this,"Фотография сохранена",Toast.LENGTH_SHORT).show()
+                }.onFailure{error->
+                    if(camera&&cameraFile().exists()){
+                        photoTarget=target
+                        AlertDialog.Builder(this).setMessage((error.message?:"Не удалось сохранить фотографию")+". Исходный снимок сохранён для повторной попытки.")
+                            .setNegativeButton("Закрыть",null).setPositiveButton("Повторить"){_,_->safely{importPhoto(null,true)}}.show()
+                    }else notice(error.message?:"Не удалось сохранить фотографию")
+                }
+                val shared=pendingShare
+                if(shared!=null){pendingShare=null;safely{flush();edit(vault.create(shared))}}
+                releaseBackground()
+            }
+        }
+    }
+    private fun showPhoto(id:String,noteId:String) {
+        flush()
+        val bitmap=vault.photos.bitmap(id,1200)?:return notice("Изображение пока не загружено. Синхронизируйте библиотеку.")
+        val image=ImageView(this).apply{setImageBitmap(bitmap);adjustViewBounds=true;scaleType=ImageView.ScaleType.FIT_CENTER}
+        val content=column().apply{setPadding(dp(12),dp(8),dp(12),dp(8))}
+        content.addView(image,LinearLayout.LayoutParams(MATCH_PARENT,WRAP_CONTENT))
+        val dialog=AlertDialog.Builder(this).setTitle("Фотография")
+            .setView(ScrollView(this).apply{addView(content)})
+            .setNegativeButton("Закрыть",null).create()
+        content.addView(button("Распознать текст"){dialog.dismiss();recognizePhoto(id,noteId)})
+        content.addView(button("Убрать из заметки"){
+            dialog.dismiss()
+            AlertDialog.Builder(this).setMessage("Убрать изображение из этой заметки? История останется.")
+                .setNegativeButton("Отмена",null).setPositiveButton("Убрать"){_,_->safely{
+                    flush();val n=vault.read(noteId)
+                    val updated=n.copy(text=PhotoStore.compose(PhotoStore.strip(n.text),PhotoStore.refs(n.text).filter{it!=id}))
+                    vault.save(updated);edit(updated)
+                }}.show()
+        })
+        dialog.setOnDismissListener{image.setImageDrawable(null);bitmap.recycle()}
+        dialog.show()
+    }
+    private fun recognizePhoto(id:String,noteId:String){
+        val note=knowledgeSource()?:return
+        require(note.id==noteId&&id in PhotoStore.refs(note.text))
+        AlertDialog.Builder(this).setTitle("Распознавание текста")
+            .setMessage("Передать сохранённую фотографию вашему серверу и настроенной модели OpenRouter? Запрос может быть платным. Результат нужно проверить.")
+            .setNegativeButton("Отмена",null).setPositiveButton("Распознать"){_,_->safely{
+                knowledgeRequest("/api/ai/ocr",org.json.JSONObject().put("id",id).put("consent",true),
+                    prepare={api->vault.photos.push(PhotoStore.append("",id),{path,data,method->api.request(path,data,method)})}){reply->
+                    knowledgeUnchanged(note)
+                    check(reply.getString("id")==id)
+                    val text=reply.getString("text")
+                    if(text.isBlank()){notice("Модель не обнаружила читаемого текста. Фотография сохранена.");return@knowledgeRequest}
+                    val field=EditText(this).apply{
+                        setText(text);minLines=4;maxLines=10
+                        gravity=android.view.Gravity.TOP
+                    }
+                    AlertDialog.Builder(this).setTitle(if(reply.optBoolean("possiblyTruncated"))"Распознанный текст · возможно неполный" else "Проверьте распознанный текст")
+                        .setView(field).setNegativeButton("Отмена",null)
+                        .setPositiveButton("Добавить в заметку"){_,_->safely{
+                            knowledgeUnchanged(note)
+                            val currentText=editor?.text?.toString().orEmpty()
+                            editor?.setText(currentText+"\n\n"+field.text.toString())
+                            flush()
+                        }}.show()
+                }
+            }}.show()
+    }
+
     private fun knowledgeRequest(path: String, data: org.json.JSONObject? = null,
                                  method: String = if (data == null) "GET" else "POST",
+                                 prepare: (KnowledgeApi)->Unit = {},
                                  result: (org.json.JSONObject) -> Unit) {
         if (syncing) return
         val connection = BackgroundSync.credentials(this) ?: return notice("Сначала подключите сервер.")
@@ -727,7 +866,7 @@ class MainActivity : Activity() {
         progress.show()
         syncing = true
         worker.execute {
-            val response = runCatching { KnowledgeApi(connection.first, connection.second).request(path,data,method) }
+            val response = runCatching { val api=KnowledgeApi(connection.first,connection.second);prepare(api);api.request(path,data,method) }
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
                 syncing = false
@@ -769,7 +908,7 @@ class MainActivity : Activity() {
                         knowledgeUnchanged(note)
                         val updated=KnowledgeApi.metadata(note.text,if(all||selected[0])heading else null,
                             tags.filterIndexed { i,_ -> all||selected[i+2] },if(all||selected[1])category else null)
-                        editor?.setText(updated)
+                        editor?.setText(PhotoStore.strip(updated))
                         flush()
                     }
                     AlertDialog.Builder(this).setTitle(if(reply.optBoolean("truncated")) "Предложения ИИ · первые 12 000 символов" else "Предложения ИИ")
@@ -841,7 +980,7 @@ class MainActivity : Activity() {
                             knowledgeUnchanged(source)
                             val actual=vault.read(target.id)
                             check(actual.text==target.text){"Целевая заметка изменилась."}
-                            editor?.setText(KnowledgeApi.link(source.text,actual.title,vault.all().map{it.title},source.links))
+                            editor?.setText(PhotoStore.strip(KnowledgeApi.link(source.text,actual.title,vault.all().map{it.title},source.links)))
                             flush()
                         }}.show()
                 }
@@ -1188,8 +1327,13 @@ class MainActivity : Activity() {
     @Deprecated("Platform document picker")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
-        if (resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) {
+            if(requestCode==9)cameraFile().delete()
+            if(requestCode==8||requestCode==9)photoTarget=null
+            return
+        }
         SyncAccess.enter(syncOwner)
+        if(requestCode==8||requestCode==9){safely{importPhoto(data?.data,requestCode==9)};return}
         if (requestCode == 5) {
             val spoken = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
             captureDraft = if (captureDraft.isBlank()) spoken else "$captureDraft $spoken"
@@ -1216,7 +1360,7 @@ class MainActivity : Activity() {
             } else if (requestCode == 6) {
                 archiveWork("Сохранение архива…") {
                     val notes = vault.all()
-                    val bytes = BackupArchive.encode(notes)
+                    val bytes = BackupArchive.encode(notes,vault.photos::read)
                     requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { it.write(bytes); it.flush() }
                     "Архив сохранён. Заметок: " + notes.size
                 }
@@ -1240,6 +1384,7 @@ class MainActivity : Activity() {
             } else if (requestCode == 2) {
                 val note = vault.read(requireNotNull(exportId))
                 requireNotNull(contentResolver.openOutputStream(uri,"wt")).use { it.write(note.text.toByteArray(Charsets.UTF_8)) }
+                if(PhotoStore.refs(note.text).isNotEmpty())notice("Markdown содержит ссылки на фотографии. Для переноса файлов сохраните архив библиотеки.")
                 exportId = null
             }
         }

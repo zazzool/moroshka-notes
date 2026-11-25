@@ -28,7 +28,9 @@ object BackupArchive {
         require(note.text.toByteArray(Charsets.UTF_8).size <= maxNoteBytes) { "Заметка в архиве больше 512 КиБ" }
     }
 
-    fun encode(notes: List<Note>): ByteArray {
+    internal data class Bundle(val notes:List<Entry>,val images:Map<String,ByteArray>)
+    fun encode(notes: List<Note>): ByteArray = encode(notes,null)
+    internal fun encode(notes: List<Note>, readImage: ((String)->ByteArray?)?): ByteArray {
         require(notes.size <= maxNotes) { "В архиве не более 10 000 заметок" }
         val ids = mutableSetOf<String>()
         val entries = JSONArray()
@@ -36,7 +38,20 @@ object BackupArchive {
             validate(note, ids)
             entries.put(JSONObject().put("id", note.id).put("text", note.text).put("sha256", digest(note.text)))
         }
-        return JSONObject().put("format", format).put("version", 1).put("notes", entries)
+        val refs=notes.flatMap{PhotoStore.refs(it.text)}.distinct()
+        val images=JSONArray()
+        var imageLength=0L
+        for(id in refs){
+            val bytes=requireNotNull(readImage?.invoke(id)){"В архиве отсутствует изображение"}
+            PhotoStore.verify(id,bytes)
+            val data=PhotoStore.base64(bytes)
+            imageLength+=data.length
+            require(imageLength<=maxBytes){"Архив больше 32 МиБ"}
+            images.put(JSONObject().put("id",id).put("data",data))
+        }
+        val result=JSONObject().put("format",format).put("version",if(refs.isEmpty())1 else 2).put("notes",entries)
+        if(refs.isNotEmpty())result.put("images",images)
+        return result
             .toString().toByteArray(Charsets.UTF_8).also {
                 require(it.size <= maxBytes) { "Архив больше 32 МиБ" }
             }
@@ -54,18 +69,19 @@ object BackupArchive {
         return output.toByteArray()
     }
 
-    fun decode(bytes: ByteArray): List<Entry> {
+    fun decode(bytes: ByteArray): List<Entry> = decodeBundle(bytes).notes
+    internal fun decodeBundle(bytes: ByteArray): Bundle {
         require(bytes.size <= maxBytes) { "Архив больше 32 МиБ" }
         val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
         val tokenizer = JSONTokener(text)
         val data = tokenizer.nextValue() as? JSONObject ?: error("Неподдерживаемый формат архива Морошки")
         require(tokenizer.nextClean() == '\u0000' && data.opt("format") == format &&
-            data.opt("version") == 1) { "Неподдерживаемый формат архива Морошки" }
+            data.opt("version") in listOf(1,2)) { "Неподдерживаемый формат архива Морошки" }
         val array = data.optJSONArray("notes") ?: error("В архиве нет списка заметок")
         require(array.length() <= maxNotes) { "В архиве не более 10 000 заметок" }
         val ids = mutableSetOf<String>()
-        return (0 until array.length()).map { index ->
+        val notes = (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
             val id = item.opt("id") as? String ?: error("Некорректный UUID заметки")
             val body = item.opt("text") as? String ?: error("Некорректный текст заметки")
@@ -75,6 +91,18 @@ object BackupArchive {
             require(item.opt("sha256") == hash) { "Контрольная сумма заметки не совпадает: $id" }
             Entry(note, hash)
         }
+        val refs=notes.flatMap{PhotoStore.refs(it.note.text)}.toSet()
+        val images=linkedMapOf<String,ByteArray>()
+        val items=if(data.optInt("version")==2) data.getJSONArray("images") else JSONArray()
+        for(i in 0 until items.length()){
+            val image=items.getJSONObject(i)
+            val id=image.getString("id")
+            require(id in refs && id !in images){"Лишнее или повторное изображение в архиве"}
+            val body=PhotoStore.decode(image.getString("data"))
+            PhotoStore.verify(id,body);images[id]=body
+        }
+        require(images.keys==refs){"В архиве отсутствует изображение"}
+        return Bundle(notes,images)
     }
 
     private fun conflictId(entry: Entry, attempt: Int): String {

@@ -1,7 +1,9 @@
-import { encodeArchive, decodeArchive, planRestore, maxArchiveBytes } from '/backup.mjs'
+import { encodeArchive, decodeArchiveBundle, planRestore, maxArchiveBytes } from '/backup.mjs'
 import { pullSnapshot } from '/sync-pull.mjs'
 import { applyProposal, appendLink, categoryLabels } from '/knowledge.mjs'
 import { titleOf, linksOf, tagsOf, scan } from '/markdown.mjs'
+import { imageRefs, appendImage, stripImages, composeImages, feedContent } from '/media-format.mjs'
+import { getImage, saveImage, importPhoto, pullImages, pushImages } from '/media-store.mjs'
 
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
@@ -20,11 +22,18 @@ let activePairing = null
 let archiveGeneration = 0
 let archiveText = null
 let archiveSourceId = null
+let photoTarget=null, photoBusy=false, photoGeneration=0
+let feedLimit=80
+const thumbnailUrls=new Map()
 const title = n => titleOf(n.text)
 const links = linksOf
 const norm = text => text.trim().toLocaleLowerCase()
 function put(note) {
   if (new Blob([note.text]).size > 512 * 1024) throw Error('Предел одной заметки — 512 КиБ')
+  const previous=notes.get(note.id)
+  if(note.dirty&&(!previous||previous.text!==note.text))note={...note,modifiedAt:Date.now(),timeSource:'local'}
+  else if(!note.modifiedAt&&previous?.modifiedAt)note={...note,modifiedAt:previous.modifiedAt,timeSource:previous.timeSource}
+  else if(!note.modifiedAt&&!note.dirty&&!previous)note={...note,modifiedAt:Date.now(),timeSource:'received'}
   localStorage.setItem(prefix + note.id, JSON.stringify(note))
   notes.set(note.id, note)
   if (note.dirty && !exchangeActive) requestAuto(AUTO_DELAY)
@@ -48,12 +57,12 @@ function action(label, callback) {
 }
 function persistEditor() {
   if (!dirtyEditor || !selected) return
-  put({ ...notes.get(selected), text: $('body').value, dirty: true })
+  put({ ...notes.get(selected), text: composeImages($('body').value,imageRefs(notes.get(selected).text)), dirty: true })
   dirtyEditor = false; $('saved').textContent = 'Сохранено на устройстве'
 }
 function select(id) {
   persistEditor(); selected = id; $('reader').hidden = !id
-  if (id) { $('body').value = notes.get(id).text; $('saved').textContent = notes.get(id).dirty ? 'На устройстве' : 'Синхронизировано' }
+  if (id) { $('body').value = stripImages(notes.get(id).text); $('saved').textContent = notes.get(id).dirty ? 'На устройстве' : 'Синхронизировано' }
   render()
   if (!id && autoEnabled && !exchangeActive) requestAuto(AUTO_DELAY)
 }
@@ -75,26 +84,33 @@ function related() {
   }
 }
 function render() {
-  $('capture').hidden = view !== 'notes'
+  $('capture').hidden = false
   const list = $('items'); list.replaceChildren()
   const q = norm($('search').value)
   let count = 0
-  for (const n of [...notes.values()].sort((a,b) => title(a).localeCompare(title(b),'ru'))) {
+  const ordered=[...notes.values()].sort((a,b)=>(b.modifiedAt||0)-(a.modifiedAt||0)||a.id.localeCompare(b.id))
+  let previousDay=''
+  for (const n of ordered) {
     if (!norm(n.text).includes(q)) continue
     if (view === 'notes') {
+      if(count>=feedLimit)break
+      const day=n.modifiedAt?new Date(n.modifiedAt).toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}):'Без даты'
+      if(day!==previousDay){list.append(el('div',day,'feed-day'));previousDay=day}
       const b = action('', () => select(n.id)); b.className = 'note'
       if (n.id === selected) b.setAttribute('aria-current','true')
-      const symbol = el('span','','note-symbol'); symbol.setAttribute('aria-hidden','true')
-      const body = el('span','','note-body')
-      body.append(el('strong',title(n)), el('small',n.text.split('\n').filter(l => l.trim() && !l.startsWith('# ')).join(' ') || 'Markdown'))
-      const tags = tagsOf(n.text)
-      if (tags.length) {
-        const group = el('span','','note-tags')
-        for (const tag of tags.slice(0,5)) group.append(el('span',tag.startsWith('type-')&&categoryLabels[tag.slice(5)]?categoryLabels[tag.slice(5)]:'#'+tag,'chip'))
-        if (tags.length > 5) group.append(el('span','+'+(tags.length-5),'chip'))
-        body.append(group)
-      }
-      b.append(symbol,body)
+      const context=feedContent(n.text)
+      const body=el('span','','note-body')
+      body.append(el('span',context.body,'note-excerpt'))
+      if(context.title!=='Без названия'&&context.title!==context.body&&!context.body.startsWith(context.title+' '))
+        body.append(el('span',context.title,'note-heading'))
+      const time=n.modifiedAt?new Date(n.modifiedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'Дата неизвестна'
+      const info=[(n.timeSource==='received'?'Получено ':'')+time,
+        context.images?'Фото: '+context.images:'',context.links?'Связей: '+context.links:'',
+        ...context.tags.slice(0,3).map(t=>t.startsWith('type-')&&categoryLabels[t.slice(5)]?categoryLabels[t.slice(5)]:'#'+t)]
+      body.append(el('span',info.filter(Boolean).join(' · '),'note-context'))
+      b.append(body)
+      const id=imageRefs(n.text)[0]
+      if(id)b.append(photoThumbnail(id,'note-photo'))
       list.append(b); count++
     } else {
       scan(n.text).prose.forEach(({line,index:i}) => {
@@ -104,7 +120,7 @@ function render() {
         check.onchange = () => {
           try {
             const lines = n.text.split('\n'); lines[i] = lines[i].replace(/\[[ xX]\]/,check.checked ? '[x]' : '[ ]')
-            put({...n,text:lines.join('\n'),dirty:true}); if (selected === n.id) $('body').value = notes.get(n.id).text
+            put({...n,text:lines.join('\n'),dirty:true}); if (selected === n.id) $('body').value = stripImages(notes.get(n.id).text)
             render()
           } catch(e) { report(e); render() }
         }
@@ -112,19 +128,17 @@ function render() {
       })
     }
   }
-  $('count').textContent = count
+  $('count').textContent = view==='notes'?ordered.filter(n=>norm(n.text).includes(q)).length:count
+  if(view==='notes'&&ordered.filter(n=>norm(n.text).includes(q)).length>feedLimit)list.append(action('Показать ещё',()=>{feedLimit+=80;render()}))
   if (!count) {
     const box = el('div','','empty')
-    const art = document.createElement('img')
-    art.src = q ? '/assets/search.webp' : view === 'tasks' ? '/assets/balance.webp' : '/assets/ideas.webp'
-    art.alt = ''; art.loading = 'lazy'; art.className = 'empty-art'
-    box.append(art)
     box.append(el('h2',q ? 'Совпадений нет' : view === 'tasks' ? 'Задач пока нет' : 'Первая заметка'),
       el('p',q ? 'Попробуйте другое слово или тег.' : view === 'tasks' ? 'Строки вида «- [ ] Прочитать статью» появятся здесь.' : 'Запишите мысль. Добавьте [[ссылку]], чтобы связать её с другой заметкой.'))
-    if (!q && view === 'notes') box.append(action('Создать заметку',newNote))
+
     list.append(box)
   }
   related()
+  renderPhotos()
 }
 function newNote() {
   const n = create('# Новая заметка\n\n'); select(n.id); $('body').focus(); $('body').setSelectionRange(2,15)
@@ -187,7 +201,7 @@ async function runAuto() {
   autoTimer = null
   if (!autoEnabled || !token || autoAuthBlocked) return
   if (document.visibilityState !== 'visible') { requestAuto(AUTO_POLL); return }
-  if (busy || document.querySelector('dialog[open]')) { requestAuto(5000); return }
+  if (busy || photoBusy || document.querySelector('dialog[open]')) { requestAuto(5000); return }
   if (!navigator.onLine) {
     $('status').textContent = 'Офлайн · локальные заметки сохранены'
     requestAuto(AUTO_POLL)
@@ -207,13 +221,13 @@ function applySynced(note) {
   put(note)
   if (selected === note.id) {
     // Preserve focus and selection if text has not changed.
-    if ($('body').value !== note.text) $('body').value = note.text
+    if ($('body').value !== stripImages(note.text)) $('body').value = stripImages(note.text)
     $('saved').textContent = note.dirty ? 'На устройстве' : 'Синхронизировано'
   }
 }
 async function sync(automatic = false) {
   if (!token) { if (!automatic) openSettings(); return }
-  if (busy) return
+  if (busy || photoBusy) return
   if (automatic && !autoEnabled) return
   try { persistEditor() } catch(e) {
     if (automatic) {
@@ -235,6 +249,15 @@ async function sync(automatic = false) {
   try {
     const knownBases = new Map([...notes.values()].map(n=>[n.id,n.base]))
     const {notes:remote, deleted = []} = await pullSnapshot(api,knownBases,checkpoint)
+    checkpoint()
+    $('note-photos').dataset.key=''
+    for(const r of remote){
+      if(typeof r.text==='string')await pullImages(r.text,api,checkpoint)
+      else{
+        const local=notes.get(r.id)
+        if(local&&!local.dirty)await pullImages(local.text,api,checkpoint)
+      }
+    }
     checkpoint()
     const deletedIds = new Set(deleted.map(n=>n.id))
     for (const item of deleted) {
@@ -259,15 +282,18 @@ async function sync(automatic = false) {
       const r = byId.get(id)
       if (r && !n) {
         if (typeof r.text !== 'string') throw Error('Локальная библиотека изменилась. Повторите обмен.')
-        applySynced({id:r.id,text:r.text,base:r.revision,dirty:false}); continue
+        applySynced({id:r.id,text:r.text,base:r.revision,dirty:false,modifiedAt:r.modifiedAt,timeSource:r.modifiedAt?'server':'received'}); continue
       }
       if (!n) continue
       if (r && typeof r.text !== 'string') {
         if (n.base !== r.revision) throw Error('Локальная редакция изменилась. Повторите обмен.')
-        if (!n.dirty) continue
+        if (!n.dirty) {
+          if(r.modifiedAt&&n.modifiedAt!==r.modifiedAt)applySynced({...n,modifiedAt:r.modifiedAt,timeSource:'server'})
+          continue
+        }
       }
       if (r && r.text === n.text) {
-        if (n.dirty || n.base !== r.revision) applySynced({id,text:n.text,base:r.revision,dirty:false})
+        if (n.dirty || n.base !== r.revision || (r.modifiedAt&&n.modifiedAt!==r.modifiedAt)) applySynced({id,text:n.text,base:r.revision,dirty:false,modifiedAt:r.modifiedAt,timeSource:r.modifiedAt?'server':n.timeSource})
         continue
       }
       if (r && (!n.dirty || r.revision !== n.base)) {
@@ -277,13 +303,14 @@ async function sync(automatic = false) {
           create(new Blob([copy]).size > 512*1024 ? n.text : copy)
           conflicts++
         }
-        applySynced({id,text:r.text,base:r.revision,dirty:false})
+        applySynced({id,text:r.text,base:r.revision,dirty:false,modifiedAt:r.modifiedAt,timeSource:r.modifiedAt?'server':'received'})
         continue
       }
       if (!n.dirty && r) continue
       // Absence without a tombstone is not a deletion (server rollback/migration).
       // A conditional create still refuses a concurrent write or tombstone.
       const sentText = n.text, sentBase = r ? n.base : null
+      await pushImages(sentText,api,checkpoint)
       const result = await api('/api/notes/'+id,'PUT',{text:sentText,base:sentBase})
       checkpoint()
       const latest = notes.get(id)
@@ -483,7 +510,7 @@ async function analyzeNote(){
         category:all||category.checked?result.category:null,tags:tagOptions.filter(t=>all||t.box.checked).map(t=>t.tag)})
       if(text!==source.text){
         put({...notes.get(source.id),text,dirty:true})
-        $('body').value=text; $('saved').textContent='Сохранено на устройстве'; render()
+        $('body').value=stripImages(text); $('saved').textContent='Сохранено на устройстве'; render()
       }
       d.close()
     }
@@ -549,11 +576,132 @@ async function suggestLinks(){
         const target=notes.get(item.id)
         if(!target||target.dirty||target.base!==item.revision||title(target)!==item.title)throw Error('Сначала синхронизируйте целевую заметку.')
         const text=appendLink(source.text,item.title,[...notes.values()].map(title),links(source.text))
-        if(text!==source.text){put({...source,text,dirty:true});$('body').value=text;$('saved').textContent='Сохранено на устройстве';render()}
+        if(text!==source.text){put({...source,text,dirty:true});$('body').value=stripImages(text);$('saved').textContent='Сохранено на устройстве';render()}
         d.close()
       }))
     }
   }catch(e){if(d.active())d.status(e.message)}
+}
+
+function photoThumbnail(id,cls='photo-thumb'){
+  const image=el('img','',cls);image.alt='Фотография';image.loading='lazy'
+  if(thumbnailUrls.has(id)){image.src=thumbnailUrls.get(id);return image}
+  getImage(id).then(bytes=>{
+    if(!bytes||!image.isConnected)return
+    if(!thumbnailUrls.has(id)){
+      if(thumbnailUrls.size>=80){
+        const oldest=thumbnailUrls.keys().next().value
+        URL.revokeObjectURL(thumbnailUrls.get(oldest));thumbnailUrls.delete(oldest)
+      }
+      thumbnailUrls.set(id,URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'})))
+    }
+    image.src=thumbnailUrls.get(id)
+  }).catch(()=>{})
+  return image
+}
+function renderPhotos(){
+  const strip=$('note-photos')
+  const ids=selected?imageRefs(notes.get(selected).text):[]
+  const key=(selected||'')+ids.join(',')
+  if(strip.dataset.key===key)return
+  strip.dataset.key=key;strip.replaceChildren();strip.hidden=!ids.length
+  for(const id of ids){
+    const button=action('',()=>showPhoto(id))
+    button.className='photo-tile';button.setAttribute('aria-label','Открыть фотографию')
+    button.append(photoThumbnail(id))
+    strip.append(button)
+  }
+}
+function choosePhoto(target){
+  if(photoBusy||busy){alertText('Обмен выполняется','Повторите действие после завершения текущего обмена.');return}
+  try{persistEditor()}catch(e){report(e);return}
+  photoTarget=target
+  $('photo-source').showModal()
+}
+async function addPhoto(file){
+  if(!file||photoBusy)return
+  const target=photoTarget
+  photoTarget=null;photoBusy=true
+  const status=$('capture-status')
+  status.textContent='Сохранение фото…'
+  try{
+    const id=await importPhoto(file)
+    persistEditor()
+    let n
+    if(target){
+      const old=notes.get(target)
+      if(!old)throw Error('Исходная заметка больше не доступна')
+      n={...old,text:appendImage(old.text,id),dirty:true};put(n)
+    }else{
+      const draft=$('capture-text').value
+      const heading=draft.split('\n').find(l=>l.trim())?.trim().replace(/^# /,'').slice(0,80)||'Фотозаметка'
+      n=create(appendImage('# '+heading+'\n\n'+draft,id))
+      localStorage.removeItem(captureKey);$('capture-text').value=''
+    }
+    status.textContent='Фотография сохранена'
+    select(n.id)
+  }catch(e){report(e);status.textContent='Фотография не добавлена'}
+  finally{photoBusy=false;if(autoEnabled)requestAuto(AUTO_DELAY)}
+}
+async function showPhoto(id){
+  if(!selected)return
+  try{persistEditor()}catch(e){report(e);return}
+  const source={...notes.get(selected)}, gen=++photoGeneration
+  const dialog=$('photo-view')
+  $('photo-image').removeAttribute('src')
+  $('ocr-result').hidden=true;$('ocr-text').value=''
+  $('photo-status').textContent='Загрузка…'
+  $('ocr-start').disabled=true
+  dialog.showModal()
+  const active=()=>dialog.open&&photoGeneration===gen
+  let bytes
+  try{
+    bytes=await getImage(id)
+    if(!bytes&&token)await pullImages(appendImage('',id),api)
+    bytes=bytes||await getImage(id)
+    if(!active())return
+    if(!bytes)throw Error('Изображение не загружено')
+    const url=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}))
+    $('photo-image').src=url
+    $('photo-image').dataset.url=url
+    $('photo-status').textContent='Фотография сохранена'
+    $('ocr-start').disabled=false
+  }catch(e){if(active())$('photo-status').textContent=e.message}
+  $('photo-remove').onclick=()=>{
+    if(!active()||!confirm('Убрать фотографию из заметки?'))return
+    try{
+      persistEditor()
+      const current=notes.get(source.id)
+      if(!current||selected!==source.id||current.text!==source.text)throw Error('Заметка изменилась. Откройте фотографию снова.')
+      const text=composeImages(stripImages(current.text),imageRefs(current.text).filter(v=>v!==id))
+      put({...current,text,dirty:true});$('body').value=stripImages(text);dialog.close();render()
+    }catch(e){$('photo-status').textContent=e.message}
+  }
+  $('ocr-start').onclick=async()=>{
+    if(!active()||!token){$('photo-status').textContent='Сначала подключите сервер.';return}
+    if(!confirm('Передать эту фотографию вашему серверу и модели OpenRouter для распознавания? Запрос может быть платным.'))return
+    $('ocr-start').disabled=true;$('photo-status').textContent='Распознаём текст…'
+    try{
+      await pushImages(appendImage('',id),api)
+      const reply=await api('/api/ai/ocr','POST',{id,consent:true})
+      if(!active())return
+      if(reply.id!==id||typeof reply.text!=='string')throw Error('Некорректный ответ распознавания')
+      $('ocr-text').value=reply.text
+      $('ocr-result').hidden=false
+      $('photo-status').textContent=reply.possiblyTruncated?'Текст может быть неполным. Проверьте его.':'Проверьте и при необходимости исправьте текст.'
+    }catch(e){if(active())$('photo-status').textContent=e.message}
+    finally{if(active())$('ocr-start').disabled=false}
+  }
+  $('ocr-accept').onclick=()=>{
+    if(!active())return
+    try{
+      persistEditor()
+      const current=notes.get(source.id)
+      if(!current||selected!==source.id||current.text!==source.text)throw Error('Заметка изменилась. Повторите распознавание.')
+      const text=composeImages(stripImages(current.text)+'\n\n'+$('ocr-text').value,imageRefs(current.text))
+      put({...current,text,dirty:true});$('body').value=stripImages(text);dialog.close();render()
+    }catch(e){$('photo-status').textContent=e.message}
+  }
 }
 
 function start() {
@@ -561,6 +709,20 @@ function start() {
     const n = JSON.parse(localStorage.getItem(k)); notes.set(n.id,n)
   }
   $('new').onclick = () => { try { newNote() } catch(e) { report(e) } }
+  $('capture-photo').onclick=()=>choosePhoto(null)
+  $('add-photo').onclick=()=>choosePhoto(selected)
+  $('pick-photo').onclick=()=>{$('photo-source').close();$('photo-file').click()}
+  $('take-photo').onclick=()=>{$('photo-source').close();$('camera-file').click()}
+  for(const key of ['photo-file','camera-file'])$(key).onchange=()=>{
+    const file=$(key).files[0];$(key).value='';addPhoto(file)
+  }
+  $('photo-view').addEventListener('close',()=>{
+    photoGeneration++
+    const image=$('photo-image')
+    if(image.dataset.url)URL.revokeObjectURL(image.dataset.url)
+    delete image.dataset.url;image.removeAttribute('src');$('ocr-text').value=''
+  })
+  if(matchMedia('(max-width:680px)').matches)$('editor-tools').open=false
   const capture = $('capture-text')
   capture.value = localStorage.getItem(captureKey) || ''
   let unsavedCapture = false
@@ -585,7 +747,8 @@ function start() {
       localStorage.removeItem(captureKey)
       capture.value = ''; unsavedCapture = false
       $('capture-status').textContent = 'Заметка сохранена'
-      select(n.id)
+      select(null)
+      $('feed').scrollTop=0
     } catch(e) { report(e) }
   }
   window.addEventListener('beforeunload', event => {
@@ -639,7 +802,8 @@ function start() {
   })
   requestAuto(AUTO_DELAY)
   $('export').onclick = () => {
-    const a = document.createElement('a'); const url = URL.createObjectURL(new Blob([$('body').value],{type:'text/markdown'}))
+    const a = document.createElement('a'); const url = URL.createObjectURL(new Blob([notes.get(selected).text],{type:'text/markdown'}))
+    if(imageRefs(notes.get(selected).text).length)alertText('Экспорт Markdown','Для переноса фотографий используйте архив библиотеки.')
     a.href = url; a.download = title(notes.get(selected)).replace(/[^\p{L}\p{N} _-]/gu,'_').slice(0,100)+'.md'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000)
   }
   $('ai-analyze').onclick = analyzeNote
@@ -656,9 +820,10 @@ function start() {
   $('archive-history').onclick = () => {
     if (archiveSourceId) openServerArchive('history',archiveSourceId)
   }
-  $('archive-copy').onclick = () => {
+  $('archive-copy').onclick = async () => {
     if (archiveText === null) return
     try {
+      await pullImages(archiveText,api)
       const note = create(archiveText)
       $('server-archive').close()
       select(note.id)
@@ -666,7 +831,7 @@ function start() {
   }
   $('backup-export').onclick = () => {
     if ($('capture-text').value.trim()) return alertText('Сохраните черновик','В архив входят только сохранённые заметки.')
-    return archiveOperation(async () => downloadArchive(await encodeArchive(notes.values())))
+    return archiveOperation(async () => downloadArchive(await encodeArchive(notes.values(),getImage)))
   }
   $('backup-import').onclick = () => $('backup-file').click()
   $('backup-file').onchange = async () => {
@@ -675,8 +840,9 @@ function start() {
     if (!file) return
     await archiveOperation(async () => {
       if (file.size > maxArchiveBytes) throw Error('Архив больше 32 МиБ')
-      const verified = await decodeArchive(new Uint8Array(await file.arrayBuffer()))
-      const plan = await planRestore(verified, notes)
+      const bundle = await decodeArchiveBundle(new Uint8Array(await file.arrayBuffer()))
+      const plan = await planRestore(bundle.notes, notes)
+      for(const [id,bytes] of bundle.images)await saveImage(bytes,id)
       let added = 0
       for (const n of plan.additions) {
         try { put({...n,base:null,dirty:true}); added++ }

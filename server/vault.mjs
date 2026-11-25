@@ -33,7 +33,7 @@ export function openVault(dir) {
     const notes = readdirSync(dir).filter(n => n.endsWith('.md') && validId.test(n.slice(0,-3)))
       .sort().map(n => {
         const note = read(n.slice(0,-3))
-        return note && {id:note.id, revision:note.revision}
+        return note && {id:note.id, revision:note.revision, modifiedAt:Math.trunc(statSync(join(dir,n)).mtimeMs)}
       }).filter(Boolean)
     return {version:1, notes, deleted:deleted()}
   }
