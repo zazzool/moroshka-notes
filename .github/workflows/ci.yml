@@ -1,8 +1,12 @@
 name: Build and test
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 jobs:
@@ -38,8 +42,22 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :app:assembleDebug :app:assembleRelease :app:assemblePreview :app:assembleDebugAndroidTest
+      - name: Assemble Android variants (bounded retry for transient repository errors)
         working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/moroshka-gradle.log"
+          for attempt in 1 2 3; do
+            if ./gradlew :app:assembleDebug :app:assembleRelease :app:assemblePreview :app:assembleDebugAndroidTest 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if [[ "$attempt" == 3 ]] || ! grep -Eqi 'Received status code (429|502|503|504)|Read timed out|Connection timed out|Connection reset' "$log"; then
+              exit 1
+            fi
+            echo "Temporary dependency repository error; retry $attempt of 2"
+            sleep "$((attempt * 30))"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: moroshka-android-debug
