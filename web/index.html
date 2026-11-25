@@ -2,13 +2,16 @@
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#FCF5F2" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#211B29" media="(prefers-color-scheme: dark)"><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/style.css"><title>Moroshka Notes</title><script type="module" src="/app.js"></script></head>
 <body>
 <div class="shell">
-<aside><div class="brand"><img src="/assets/cloudberry.webp" width="48" height="48" alt=""><div>Морошка<small>Заметки · Знания</small></div></div>
+<aside><div class="brand"><div>Морошка</div></div>
 <nav aria-label="Библиотека"><button class="nav-notes" data-view="notes" aria-current="page">Заметки</button><button class="nav-tasks" data-view="tasks">Задачи</button></nav>
-<details class="archive-menu"><summary>Резервные копии</summary><p>Все сохранённые заметки в одном JSON. Без ключей подключения; текст не зашифрован.</p><button id="backup-export">Сохранить архив</button><button id="backup-import">Восстановить из архива</button><input id="backup-file" type="file" accept=".json,application/json" hidden></details>
-<button id="ai-search" class="trash-action">Смысловой поиск</button>
-<button id="trash" class="trash-action">Корзина сервера</button>
-<div class="connection"><span id="status" role="status">На этом устройстве</span><button id="connect">Подключение</button><button id="sync">Синхронизировать</button><label class="auto-sync-control"><input type="checkbox" id="auto-sync"> Автосинхронизация</label></div></aside>
-<main><div id="feed"><div class="top"><span>Моя библиотека</span><button id="import">Импорт .md</button><input id="file" type="file" accept=".md,text/markdown,text/plain" multiple hidden></div>
+<details id="library-tools" open><summary>Ещё</summary><div class="library-tool-body">
+<button id="connect">Подключение</button><label class="auto-sync-control"><input type="checkbox" id="auto-sync"> Автосинхронизация</label>
+<button id="ai-search">Смысловой поиск</button><button id="trash">Корзина сервера</button>
+<button id="import">Импорт .md</button><input id="file" type="file" accept=".md,text/markdown,text/plain" multiple hidden>
+<details class="archive-menu"><summary>Резервные копии</summary><p>Все сохранённые заметки и фотографии в одном JSON. Без ключей подключения; файл не зашифрован.</p><button id="backup-export">Сохранить архив</button><button id="backup-import">Восстановить из архива</button><input id="backup-file" type="file" accept=".json,application/json" hidden></details>
+</div></details>
+<div class="connection"><span id="status" role="status">На этом устройстве</span><button id="sync" aria-label="Синхронизировать">Обмен</button></div></aside>
+<main><div id="feed">
 
 <header><h1 id="heading">Заметки</h1><span id="count"></span></header>
 <label class="search"><span class="search-icon" aria-hidden="true"></span><input type="search" id="search" aria-label="Поиск" placeholder="Найти заметку или #тег"></label>
@@ -19,9 +22,9 @@
 <div class="capture-actions"><button id="capture-photo" type="button">Фото</button><button id="new" type="button" aria-label="Создать заметку">Редактор</button><button class="primary" type="submit">Сохранить</button></div>
 <span id="capture-status" role="status">На этом устройстве</span>
 </form></main>
-<section id="reader" hidden><div class="readerBar"><button id="close" aria-label="Закрыть редактор">← Библиотека</button><button id="export">Скачать .md</button></div>
+<section id="reader" hidden><div class="readerBar"><button id="close" aria-label="Закрыть редактор">← Библиотека</button><button id="export">Экспорт</button></div>
 <label for="body">Markdown</label><textarea id="body" spellcheck="true" placeholder="# Название заметки"></textarea>
-<div id="note-photos" hidden></div><div class="editorActions"><span id="saved" role="status"></span><button id="add-photo">Добавить фото</button></div><details id="editor-tools" open><summary>Действия заметки</summary><div class="editorActions"><button id="history">История сервера</button><button id="delete-note">В корзину сервера</button><button id="ai-analyze" class="summary-button">Предложения ИИ</button><button id="ai-links">Смысловые связи</button><button id="summary" class="summary-button">Резюме в OpenRouter</button></div></details>
+<div id="note-photos" hidden></div><div class="editorActions"><span id="saved" role="status"></span><button id="add-photo">Добавить фото</button><button id="recognize-photo" hidden>Распознать текст</button></div><details id="editor-tools" open><summary>Действия заметки</summary><div class="editorActions"><button id="history">История сервера</button><button id="delete-note">В корзину сервера</button><button id="ai-analyze" class="summary-button">Предложения ИИ</button><button id="ai-links">Смысловые связи</button><button id="summary" class="summary-button">Резюме в OpenRouter</button></div></details>
 <div id="related"></div></section></div>
 <input id="photo-file" type="file" accept="image/*" hidden>
 <input id="camera-file" type="file" accept="image/*" capture="environment" hidden>

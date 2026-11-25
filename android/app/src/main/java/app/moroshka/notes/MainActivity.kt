@@ -668,7 +668,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         bar.addView(button("") {
             flush()
-            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом", "История на устройстве", "Предложения ИИ", "Смысловые связи")) { _, index ->
+            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом", "История на устройстве", "Предложения ИИ", "Смысловые связи", "Экспорт заметки с вложениями")) { _, index ->
                 safely {
                     when (index) {
                         0 -> renameTitle()
@@ -685,6 +685,12 @@ class MainActivity : Activity() {
                         6 -> showVersions(note.id)
                         7 -> showAiSuggestions()
                         8 -> showSemanticLinks()
+                        9 -> {
+                            exportId = note.id
+                            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json")
+                                .addCategory(Intent.CATEGORY_OPENABLE)
+                                .putExtra(Intent.EXTRA_TITLE, vault.read(note.id).title.replace('/', '_').take(100) + ".moroshka.json"), 10)
+                        }
                     }
                 }
             }.show()
@@ -710,6 +716,13 @@ class MainActivity : Activity() {
         }
         root.addView(toolScroll)
         tools.addView(button("Фото"){choosePhoto(note.id)})
+        if(editorImages.isNotEmpty())tools.addView(button("Распознать текст"){
+            val ids=editorImages.toList()
+            if(ids.size==1)recognizePhoto(ids.first(),note.id)
+            else AlertDialog.Builder(this).setTitle("Выберите фотографию")
+                .setItems(ids.mapIndexed{index,_->"Фото "+(index+1)}.toTypedArray()){_,index->safely{recognizePhoto(ids[index],note.id)}}
+                .setNegativeButton("Отмена",null).show()
+        })
         tools.addView(button("＋ Связь") { insertLink() }.apply { icon(R.drawable.icon_link) })
         tools.addView(button("Теги") { manageTags() }.apply { icon(R.drawable.icon_tag) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
         tools.addView(button("Граф") { flush(); showLocalGraph(vault.read(note.id)) }.apply { icon(R.drawable.icon_graph) },
@@ -1381,10 +1394,18 @@ class MainActivity : Activity() {
                     out.toByteArray()
                 }
                 edit(vault.create(bytes.toString(Charsets.UTF_8)))
+            } else if (requestCode == 10) {
+                val id = requireNotNull(exportId)
+                exportId = null
+                archiveWork("Сохранение заметки с вложениями…") {
+                    val bytes = BackupArchive.encode(listOf(vault.read(id)),vault.photos::read)
+                    requireNotNull(contentResolver.openOutputStream(uri,"wt")).use{it.write(bytes);it.flush()}
+                    "Заметка и её вложения сохранены в переносимый архив."
+                }
             } else if (requestCode == 2) {
                 val note = vault.read(requireNotNull(exportId))
                 requireNotNull(contentResolver.openOutputStream(uri,"wt")).use { it.write(note.text.toByteArray(Charsets.UTF_8)) }
-                if(PhotoStore.refs(note.text).isNotEmpty())notice("Markdown содержит ссылки на фотографии. Для переноса файлов сохраните архив библиотеки.")
+                if(PhotoStore.refs(note.text).isNotEmpty())notice("Markdown содержит ссылки на фотографии. Для переноса файлов выберите «Экспорт заметки с вложениями» в меню редактора.")
                 exportId = null
             }
         }

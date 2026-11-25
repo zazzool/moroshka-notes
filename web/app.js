@@ -85,6 +85,8 @@ function related() {
 }
 function render() {
   $('capture').hidden = false
+  $('recognize-photo').hidden = !selected || !imageRefs(notes.get(selected).text).length
+  if (selected) $('export').textContent = imageRefs(notes.get(selected).text).length ? 'Экспорт с фото' : 'Скачать .md'
   const list = $('items'); list.replaceChildren()
   const q = norm($('search').value)
   let count = 0
@@ -434,11 +436,11 @@ async function archiveOperation(operation) {
   try { await operation() } catch(e) { report(e) }
   finally { busy = false; document.querySelector('.shell').inert = false; render() }
 }
-function downloadArchive(bytes) {
+function downloadArchive(bytes,name='Moroshka-backup-' + new Date().toISOString().slice(0,10) + '.json') {
   const a = document.createElement('a')
   const url = URL.createObjectURL(new Blob([bytes], {type:'application/json'}))
   a.href = url
-  a.download = 'Moroshka-backup-' + new Date().toISOString().slice(0,10) + '.json'
+  a.download = name
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
@@ -620,7 +622,7 @@ function choosePhoto(target){
 }
 async function addPhoto(file){
   if(!file||photoBusy)return
-  const target=photoTarget
+  const target=photoTarget, draftAtStart=$('capture-text').value, selectedAtStart=selected
   photoTarget=null;photoBusy=true
   const status=$('capture-status')
   status.textContent='Сохранение фото…'
@@ -633,13 +635,16 @@ async function addPhoto(file){
       if(!old)throw Error('Исходная заметка больше не доступна')
       n={...old,text:appendImage(old.text,id),dirty:true};put(n)
     }else{
-      const draft=$('capture-text').value
+      const draft=draftAtStart
       const heading=draft.split('\n').find(l=>l.trim())?.trim().replace(/^# /,'').slice(0,80)||'Фотозаметка'
       n=create(appendImage('# '+heading+'\n\n'+draft,id))
-      localStorage.removeItem(captureKey);$('capture-text').value=''
+      if($('capture-text').value===draftAtStart){
+        localStorage.removeItem(captureKey);$('capture-text').value=''
+      }
     }
     status.textContent='Фотография сохранена'
-    select(n.id)
+    if(selected===selectedAtStart)select(n.id)
+    else render()
   }catch(e){report(e);status.textContent='Фотография не добавлена'}
   finally{photoBusy=false;if(autoEnabled)requestAuto(AUTO_DELAY)}
 }
@@ -711,6 +716,7 @@ function start() {
   $('new').onclick = () => { try { newNote() } catch(e) { report(e) } }
   $('capture-photo').onclick=()=>choosePhoto(null)
   $('add-photo').onclick=()=>choosePhoto(selected)
+  $('recognize-photo').onclick=()=>{if(selected){const id=imageRefs(notes.get(selected).text)[0];if(id)showPhoto(id)}}
   $('pick-photo').onclick=()=>{$('photo-source').close();$('photo-file').click()}
   $('take-photo').onclick=()=>{$('photo-source').close();$('camera-file').click()}
   for(const key of ['photo-file','camera-file'])$(key).onchange=()=>{
@@ -722,7 +728,16 @@ function start() {
     if(image.dataset.url)URL.revokeObjectURL(image.dataset.url)
     delete image.dataset.url;image.removeAttribute('src');$('ocr-text').value=''
   })
-  if(matchMedia('(max-width:680px)').matches)$('editor-tools').open=false
+  const mobile=matchMedia('(max-width:680px)')
+  const libraryTools=$('library-tools')
+  const compact=()=>{libraryTools.open=!mobile.matches;if(mobile.matches)$('editor-tools').open=false}
+  compact();mobile.addEventListener('change',compact)
+  const closeTools=()=>{if(mobile.matches)libraryTools.open=false}
+  for(const id of ['connect','ai-search','trash','import','backup-import','backup-export']){
+    $(id).addEventListener('click',closeTools)
+  }
+  document.addEventListener('click',event=>{if(!libraryTools.contains(event.target))closeTools()})
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')closeTools()})
   const capture = $('capture-text')
   capture.value = localStorage.getItem(captureKey) || ''
   let unsavedCapture = false
@@ -738,6 +753,7 @@ function start() {
   }
   $('capture').onsubmit = event => {
     event.preventDefault()
+    if(photoBusy){$('capture-status').textContent='Сохраняется фотография';return}
     const original = capture.value
     if (!original.trim()) { capture.focus(); return }
     try {
@@ -747,6 +763,10 @@ function start() {
       localStorage.removeItem(captureKey)
       capture.value = ''; unsavedCapture = false
       $('capture-status').textContent = 'Заметка сохранена'
+      view='notes';$('search').value=''
+      document.querySelector('nav [aria-current]')?.removeAttribute('aria-current')
+      document.querySelector('nav [data-view="notes"]').setAttribute('aria-current','page')
+      $('heading').textContent='Заметки'
       select(null)
       $('feed').scrollTop=0
     } catch(e) { report(e) }
@@ -801,10 +821,19 @@ function start() {
     if (document.visibilityState === 'visible') requestAuto(AUTO_DELAY)
   })
   requestAuto(AUTO_DELAY)
-  $('export').onclick = () => {
-    const a = document.createElement('a'); const url = URL.createObjectURL(new Blob([notes.get(selected).text],{type:'text/markdown'}))
-    if(imageRefs(notes.get(selected).text).length)alertText('Экспорт Markdown','Для переноса фотографий используйте архив библиотеки.')
-    a.href = url; a.download = title(notes.get(selected)).replace(/[^\p{L}\p{N} _-]/gu,'_').slice(0,100)+'.md'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000)
+  $('export').onclick = async () => {
+    try{
+      persistEditor()
+      const n=notes.get(selected)
+      if(!n)return
+      const name=title(n).replace(/[^\p{L}\p{N} _-]/gu,'_').slice(0,100)||'Moroshka-note'
+      if(imageRefs(n.text).length){
+        await archiveOperation(async()=>downloadArchive(await encodeArchive([n],getImage),name+'.moroshka.json'))
+        return
+      }
+      const a=document.createElement('a'),url=URL.createObjectURL(new Blob([n.text],{type:'text/markdown'}))
+      a.href=url;a.download=name+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
+    }catch(e){report(e)}
   }
   $('ai-analyze').onclick = analyzeNote
   $('ai-search').onclick = semanticDialog

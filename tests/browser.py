@@ -13,6 +13,8 @@ KEY = secrets.token_hex(32)
 
 
 def connect(page):
+    if not page.get_by_role("button", name="Подключение", exact=True).is_visible():
+        page.locator("#library-tools > summary").click()
     page.get_by_role("button", name="Подключение", exact=True).click()
     page.get_by_text("Ввести ключ вручную").click()
     page.get_by_label("Ключ синхронизации").fill(KEY)
@@ -329,14 +331,26 @@ def photo_check(origin, browser):
     page.goto(origin)
     expect(page.locator("#capture")).to_be_visible()
     assert page.locator("#capture").bounding_box()["y"]>420
+    assert page.locator("aside").bounding_box()["height"] < 155
+    assert not page.locator("#library-tools").evaluate("(d)=>d.open")
+    page.locator("#library-tools > summary").click()
+    expect(page.locator("#backup-export")).not_to_be_visible()
+    expect(page.locator("#connect")).to_be_visible()
+    page.locator("#library-tools > summary").click()
     page.get_by_label("О чём вы думаете?").fill("Контекст фотографии")
     page.locator("#capture-photo").click()
     page.locator("#photo-source").get_by_role("button",name="Отмена").click()
     page.locator("#photo-file").set_input_files({"name":"photo.jpg","mimeType":"image/jpeg","buffer":jpeg})
     expect(page.locator("#note-photos .photo-tile")).to_have_count(1)
     expect(page.get_by_label("Markdown")).to_have_value("# Контекст фотографии\n\nКонтекст фотографии")
+    expect(page.locator("#recognize-photo")).to_be_visible()
+    assert page.locator("#recognize-photo").bounding_box()["y"] + page.locator("#recognize-photo").bounding_box()["height"] <= 840
+    page.wait_for_function("document.querySelector('#note-photos img')?.naturalWidth > 0")
+    Path("ux-artifacts").mkdir(exist_ok=True)
+    page.screenshot(path="ux-artifacts/mobile-photo-editor.png")
     page.get_by_label("Markdown").fill("# Фото\n\nТекст рядом с изображением")
     page.get_by_role("button",name="Закрыть редактор").click()
+    page.screenshot(path="ux-artifacts/mobile-photo-feed.png")
     page.evaluate("navigator.serviceWorker.ready")
     ctx.set_offline(True)
     page.reload()
@@ -363,6 +377,11 @@ def photo_check(origin, browser):
     other.locator("#ocr-accept").click()
     assert "Проверенный текст" in other.get_by_label("Markdown").input_value()
     assert "moroshka-media:" not in other.get_by_label("Markdown").input_value()
+    expect(other.locator("#recognize-photo")).to_be_visible()
+    with other.expect_download() as one: other.locator("#export").click()
+    exported=json.loads(one.value.path().read_bytes())
+    assert exported["version"]==2 and len(exported["notes"])==1 and len(exported["images"])==1
+    assert "Проверенный текст" in exported["notes"][0]["text"]
     other.get_by_role("button",name="Закрыть редактор").click()
     other.get_by_text("Резервные копии",exact=True).click()
     with other.expect_download() as dl: other.locator("#backup-export").click()
@@ -396,6 +415,9 @@ def check(origin, directory):
         expect(preview.locator("#capture-text")).to_have_value("")
         expect(preview.locator("#items .note")).to_have_count(1)
         assert preview.locator("#capture").bounding_box()["y"] > 390
+        assert preview.locator("aside").bounding_box()["height"] < 155
+        Path("ux-artifacts").mkdir(exist_ok=True)
+        preview.screenshot(path="ux-artifacts/mobile-dark-feed.png")
         preview.locator("#items .note").first.click()
         expect(preview.get_by_label("Markdown")).to_have_value("# Мысль для проверки #дизайн\n\nМысль для проверки #дизайн")
         assert preview.evaluate("document.fonts.load('16px Manrope').then(fs => fs.length > 0 && fs.every(f => f.status === 'loaded'))")
