@@ -7,12 +7,22 @@ const reference=/^!\[Фото\]\(moroshka-media:([0-9a-f]{64})\)[ \t]*\r?$/
 export function imageRefs(text){
   return [...new Set(scan(text).prose.map(({line})=>line.match(reference)?.[1]).filter(Boolean))]
 }
+export function stripImages(text){
+  const ids=imageRefs(text)
+  if(!ids.length)return text
+  const prefix=ids.map(id=>'![Фото](moroshka-media:'+id+')').join('\n')+'\n\n'
+  if(text.startsWith(prefix))return text.slice(prefix.length)
+  const indexes=new Set(scan(text).prose.filter(({line})=>reference.test(line)).map(({index})=>index))
+  return text.split('\n').filter((_,i)=>!indexes.has(i)).join('\n')
+}
+export function composeImages(text,ids){
+  const unique=[...new Set(ids)]
+  if(unique.length>128||unique.some(id=>!imageId.test(id)))throw Error('Некорректные изображения заметки')
+  return unique.length?unique.map(id=>'![Фото](moroshka-media:'+id+')').join('\n')+'\n\n'+text:text
+}
 export function appendImage(text,id){
   if(!imageId.test(id))throw Error('Некорректный идентификатор изображения')
-  if(imageRefs(text).includes(id))return text
-  const line='![Фото](moroshka-media:'+id+')\n'
-  return scan(text).openFence ? line+'\n'+text :
-    text+(!text||text.endsWith('\n\n')?'':text.endsWith('\n')?'\n':'\n\n')+line
+  return imageRefs(text).includes(id)?text:composeImages(stripImages(text),[...imageRefs(text),id])
 }
 export function feedContent(text){
   const body=scan(text).prose.map(({line})=>line.trim())
