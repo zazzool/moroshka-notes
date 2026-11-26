@@ -5,8 +5,8 @@
 <aside><div class="brand"><div>Морошка</div></div>
 <nav aria-label="Библиотека"><button class="nav-notes" data-view="notes" aria-current="page">Заметки</button><button class="nav-tasks" data-view="tasks">Задачи</button></nav>
 <details id="library-tools" open><summary>Ещё</summary><div class="library-tool-body">
-<button id="connect">Подключение</button><label class="auto-sync-control"><input type="checkbox" id="auto-sync"> Автосинхронизация</label>
-<button id="ai-search">Смысловой поиск</button><button id="trash">Корзина сервера</button>
+<button id="connect">Подключение</button><button id="processing-settings">Обработка заметок и OpenRouter</button><label class="auto-sync-control"><input type="checkbox" id="auto-sync"> Автосинхронизация</label>
+<button id="ai-search">Расширенный поиск</button><button id="trash">Корзина сервера</button>
 <button id="import">Импорт .md</button><input id="file" type="file" accept=".md,text/markdown,text/plain" multiple hidden>
 <details class="archive-menu"><summary>Резервные копии</summary><p>Все сохранённые заметки и фотографии в одном JSON. Без ключей подключения; файл не зашифрован.</p><button id="backup-export">Сохранить архив</button><button id="backup-import">Восстановить из архива</button><input id="backup-file" type="file" accept=".json,application/json" hidden></details>
 </div></details>
@@ -24,7 +24,7 @@
 </form></main>
 <section id="reader" hidden><div class="readerBar"><button id="close" aria-label="Закрыть редактор">← Библиотека</button><button id="export">Экспорт</button></div>
 <label for="body">Markdown</label><textarea id="body" spellcheck="true" placeholder="# Название заметки"></textarea>
-<div id="note-photos" hidden></div><div class="editorActions"><span id="saved" role="status"></span><button id="add-photo">Добавить фото</button><button id="recognize-photo" hidden>Распознать текст</button></div><details id="editor-tools" open><summary>Действия заметки</summary><div class="editorActions"><button id="history">История сервера</button><button id="delete-note">В корзину сервера</button><button id="ai-analyze" class="summary-button">Предложения ИИ</button><button id="ai-links">Смысловые связи</button><button id="summary" class="summary-button">Резюме в OpenRouter</button></div></details>
+<div id="note-photos" hidden></div><div class="editorActions"><span id="saved" role="status"></span><button id="add-photo">Добавить фото</button><button id="recognize-photo" hidden>Распознать текст</button></div><details id="editor-tools" open><summary>Действия заметки</summary><div class="editorActions"><button id="history">История сервера</button><button id="delete-note">В корзину сервера</button><button id="ai-analyze" class="summary-button">Предложения ИИ</button><button id="ai-links">Предложения связей</button><button id="summary" class="summary-button">Краткое содержание</button></div></details>
 <div id="related"></div></section></div>
 <input id="photo-file" type="file" accept="image/*" hidden>
 <input id="camera-file" type="file" accept="image/*" capture="environment" hidden>

@@ -4,6 +4,8 @@ import { applyProposal, appendLink, categoryLabels } from '/knowledge.mjs'
 import { titleOf, linksOf, tagsOf, scan } from '/markdown.mjs'
 import { imageRefs, appendImage, stripImages, composeImages, feedContent } from '/media-format.mjs'
 import { getImage, saveImage, importPhoto, pullImages, pushImages } from '/media-store.mjs'
+import { operations, defaults, modes, normalizeModes, localMetadata, localSummary, localRank } from '/processing.mjs'
+import { installOcr, ocrReady, recognizeLocal } from '/local-ocr.mjs'
 
 const $ = id => document.getElementById(id)
 const prefix = 'moroshka.note.'
@@ -444,10 +446,18 @@ function downloadArchive(bytes,name='Moroshka-backup-' + new Date().toISOString(
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+const processingKey='moroshka.processing.v1'
+let routes=normalizeModes(null)
+try{routes=normalizeModes(JSON.parse(localStorage.getItem(processingKey)||'null'))}catch{}
+function processingMode(op){
+  const mode=routes[op]
+  if(mode==='off'){alertText('Операция выключена','Измените режим в разделе «Обработка заметок».');return null}
+  return mode
+}
 let knowledgeGeneration=0
-function knowledgeDialog(titleText){
+function knowledgeDialog(titleText,serverRequired=true){
   if(busy)return null
-  if(!token){alertText('Подключите сервер','Интеллектуальные функции работают через ваш сервер.');return null}
+  if(serverRequired&&!token){alertText('Подключите сервер','Настройте сервер для этой операции.');return null}
   try{persistEditor()}catch(e){report(e);return null}
   const gen=++knowledgeGeneration, dialog=$('knowledge-dialog')
   $('knowledge-title').textContent=titleText
@@ -474,17 +484,17 @@ function checkedOption(body,text){
   body.append(label)
   return box
 }
-function currentPinned(source){
+function currentPinned(source,local=false){
   persistEditor()
   const n=notes.get(source.id)
-  if(selected!==source.id||!n||n.text!==source.text||n.base!==source.base||n.dirty)
+  if(selected!==source.id||!n||n.text!==source.text||(!local&&(n.base!==source.base||n.dirty)))
     throw Error('Заметка изменилась. Повторите анализ после синхронизации.')
   return n
 }
-function pinnedSelection(){
+function pinnedSelection(local=false){
   try{persistEditor()}catch(e){report(e);return null}
   const n=notes.get(selected)
-  if(!n||!token||n.dirty||!n.base){
+  if(!n||(!local&&(!token||n.dirty||!n.base))){
     alertText('Сначала синхронизируйте заметку','Предложения привязаны к сохранённой на сервере редакции.')
     return null
   }
@@ -492,14 +502,15 @@ function pinnedSelection(){
 }
 async function analyzeNote(){
   if(busy)return
-  const source=pinnedSelection(); if(!source)return
-  if(!confirm('Передать OpenRouter до 12 000 символов этой заметки для создания предложений? Запрос может быть платным.'))return
-  const d=knowledgeDialog('Предложения ИИ'); if(!d)return
+  const mode=processingMode('metadata');if(!mode)return
+  const local=mode==='local',source=pinnedSelection(local); if(!source)return
+  if(!local&&!confirm('Передать OpenRouter до 12 000 символов этой заметки для создания предложений? Запрос может быть платным.'))return
+  const d=knowledgeDialog(local?'Предложения · локальные правила':'Предложения ИИ',!local); if(!d)return
   try{
-    const result=await api('/api/ai/analyze','POST',{id:source.id,revision:source.base,consent:true})
+    const result=local?localMetadata(source.text):await api('/api/ai/analyze','POST',{id:source.id,revision:source.base,consent:true})
     if(!d.active())return
-    if(result.id!==source.id||result.revision!==source.base)throw Error('Получена другая редакция')
-    currentPinned(source)
+    if(!local&&(result.id!==source.id||result.revision!==source.base))throw Error('Получена другая редакция')
+    currentPinned(source,local)
     // Validate all candidates before showing any action that can persist them.
     applyProposal(source.text,{title:result.title,tags:result.tags,category:result.category})
     d.status(result.truncated?'Проанализированы первые 12 000 символов. Выберите изменения.':'Выберите изменения. Исходный текст не переписывается.')
@@ -507,7 +518,7 @@ async function analyzeNote(){
     const category=checkedOption(d.body,'Тип: '+categoryLabels[result.category])
     const tagOptions=result.tags.map(t=>({tag:t,box:checkedOption(d.body,'#'+t)}))
     function accept(all){
-      currentPinned(source)
+      currentPinned(source,local)
       const text=applyProposal(source.text,{title:all||heading.checked?result.title:null,
         category:all||category.checked?result.category:null,tags:tagOptions.filter(t=>all||t.box.checked).map(t=>t.tag)})
       if(text!==source.text){
@@ -520,6 +531,25 @@ async function analyzeNote(){
   }catch(e){if(d.active())d.status(e.message)}
 }
 async function semanticDialog(){
+  const mode=processingMode('search');if(!mode)return
+  if(mode==='local'){
+    const d=knowledgeDialog('Расширенный поиск · локально',false);if(!d)return
+    d.status('Ранжирование по совпадению слов. Не используются эмбеддинги или OpenRouter.')
+    const input=el('input','');input.setAttribute('aria-label','Локальный запрос');input.placeholder='Слова или фраза';input.maxLength=1000
+    const results=el('div','','knowledge-results')
+    d.body.append(input,knowledgeButton('Найти',()=>{
+      const query=input.value.trim();if(!query)throw Error('Введите запрос')
+      results.replaceChildren()
+      const found=localRank(query,notes.values())
+      if(!found.length)results.append(el('p','Совпадений по словам нет.'))
+      for(const row of found)results.append(knowledgeButton(title(row),()=>{
+        const n=notes.get(row.id);if(!n||n.text!==row.text)throw Error('Заметка изменилась. Повторите поиск.')
+        d.close();select(n.id)
+      }))
+    }),results)
+    input.focus()
+    return
+  }
   const d=knowledgeDialog('Смысловой поиск');if(!d)return
   async function refresh(){
     const status=await api('/api/ai/status')
@@ -566,17 +596,18 @@ async function semanticDialog(){
 }
 async function suggestLinks(){
   if(busy)return
-  const source=pinnedSelection();if(!source)return
-  const d=knowledgeDialog('Смысловые связи');if(!d)return
+  const mode=processingMode('links');if(!mode)return
+  const local=mode==='local',source=pinnedSelection(local);if(!source)return
+  const d=knowledgeDialog(local?'Предложения связей · по словам':'Смысловые связи',!local);if(!d)return
   try{
-    const result=await api('/api/ai/related','POST',{id:source.id,revision:source.base})
+    const result=local?{notes:localRank(stripImages(source.text),notes.values(),source.id).map(n=>({...n,title:title(n)}))}:await api('/api/ai/related','POST',{id:source.id,revision:source.base})
     if(!d.active())return
-    d.status(result.notes.length?'Похожие индексированные заметки. Это предложения, а не установленные связи.':'Похожих индексированных заметок пока нет.')
+    d.status(local?'Совпадения по словам; связь добавляется только по вашему выбору.':result.notes.length?'Похожие индексированные заметки. Это предложения, а не установленные связи.':'Похожих индексированных заметок пока нет.')
     for(const item of result.notes){
       d.body.append(knowledgeButton('Связать: '+item.title,()=>{
-        currentPinned(source)
+        currentPinned(source,local)
         const target=notes.get(item.id)
-        if(!target||target.dirty||target.base!==item.revision||title(target)!==item.title)throw Error('Сначала синхронизируйте целевую заметку.')
+        if(!target||title(target)!==item.title||(local?target.text!==item.text:target.dirty||target.base!==item.revision))throw Error('Целевая заметка изменилась. Повторите запрос.')
         const text=appendLink(source.text,item.title,[...notes.values()].map(title),links(source.text))
         if(text!==source.text){put({...source,text,dirty:true});$('body').value=stripImages(text);$('saved').textContent='Сохранено на устройстве';render()}
         d.close()
@@ -683,17 +714,32 @@ async function showPhoto(id){
     }catch(e){$('photo-status').textContent=e.message}
   }
   $('ocr-start').onclick=async()=>{
-    if(!active()||!token){$('photo-status').textContent='Сначала подключите сервер.';return}
-    if(!confirm('Передать эту фотографию вашему серверу и модели OpenRouter для распознавания? Запрос может быть платным.'))return
+    if(!active())return
+    const mode=routes.ocr
+    if(mode==='off'){$('photo-status').textContent='OCR выключен в настройках обработки.';return}
+    if(mode==='server'&&!token){$('photo-status').textContent='Сначала подключите сервер.';return}
+    if(mode==='server'&&!confirm('Передать эту фотографию вашему серверу и модели OpenRouter для распознавания? Запрос может быть платным.'))return
     $('ocr-start').disabled=true;$('photo-status').textContent='Распознаём текст…'
     try{
-      await pushImages(appendImage('',id),api)
-      const reply=await api('/api/ai/ocr','POST',{id,consent:true})
+      let reply
+      if(mode==='local'){
+        if(!await ocrReady()){
+          if(!confirm('Загрузить проверенные файлы OCR и языковые пакеты с вашего сервера? Фото не отправляется.'))return
+          $('photo-status').textContent='Установка локального OCR…'
+          await installOcr()
+        }
+        if(!active())return
+        $('photo-status').textContent='Распознавание на устройстве…'
+        reply={id,text:await recognizeLocal(bytes)}
+      }else{
+        await pushImages(appendImage('',id),api)
+        reply=await api('/api/ai/ocr','POST',{id,consent:true})
+      }
       if(!active())return
       if(reply.id!==id||typeof reply.text!=='string')throw Error('Некорректный ответ распознавания')
       $('ocr-text').value=reply.text
       $('ocr-result').hidden=false
-      $('photo-status').textContent=reply.possiblyTruncated?'Текст может быть неполным. Проверьте его.':'Проверьте и при необходимости исправьте текст.'
+      $('photo-status').textContent=reply.possiblyTruncated?'Текст может быть неполным. Проверьте его.':(mode==='local'?'Локальное OCR · ':'OpenRouter · ')+'Проверьте и при необходимости исправьте текст.'
     }catch(e){if(active())$('photo-status').textContent=e.message}
     finally{if(active())$('ocr-start').disabled=false}
   }
@@ -707,6 +753,76 @@ async function showPhoto(id){
       put({...current,text,dirty:true});$('body').value=stripImages(text);dialog.close();render()
     }catch(e){$('photo-status').textContent=e.message}
   }
+}
+
+function fieldLabel(body,name,input){
+  const label=el('label',name,'processing-label')
+  label.append(input);body.append(label);return input
+}
+function processingSettings(){
+  const d=knowledgeDialog('Обработка заметок',false);if(!d)return
+  d.status('Режимы относятся к этому устройству. Серверный режим не отправляет данные без отдельного действия.')
+  const controls=new Map()
+  for(const [op,name] of Object.entries(operations)){
+    const select=el('select','')
+    for(const [id,label] of Object.entries(modes)){
+      const option=el('option',label);option.value=id;select.append(option)
+    }
+    select.value=routes[op];select.setAttribute('aria-label',name)
+    fieldLabel(d.body,name,select);controls.set(op,select)
+  }
+  d.body.append(el('p','Локально: простые правила, извлечение фраз и совпадения слов. OCR — Tesseract, русский и английский. Не генеративный ИИ.'))
+  d.body.append(knowledgeButton('По умолчанию',()=>{for(const [op,select] of controls)select.value=defaults[op]}))
+  d.body.append(knowledgeButton('Сохранить режимы',()=>{
+    const value=normalizeModes(Object.fromEntries([...controls].map(([op,select])=>[op,select.value])))
+    localStorage.setItem(processingKey,JSON.stringify(value));routes=value
+    d.status('Режимы сохранены на этом устройстве.')
+  }))
+  d.body.append(knowledgeButton('Настроить OpenRouter на сервере',()=>{d.close();setTimeout(openRouterSettings,0)}))
+  d.body.append(knowledgeButton('Установить локальный OCR',async()=>{
+    if(await ocrReady()){d.status('Русский и английский OCR уже установлен.');return}
+    if(!confirm('Загрузить OCR-движок и языковые пакеты с вашего сервера? Фото не отправляются.'))return
+    d.status('Загрузка пакетов…');await installOcr()
+    if(d.active())d.status('Локальное распознавание готово.')
+  }))
+}
+async function openRouterSettings(){
+  const d=knowledgeDialog('OpenRouter · сервер');if(!d)return
+  try{
+    const config=await api('/api/ai/config');if(!d.active())return
+    d.status(config.configured?'API-ключ настроен на сервере.':'OpenRouter не подключён.')
+    d.body.append(el('p','Настройки действуют на всех устройствах. Ключ хранится только на сервере и не показывается повторно.'))
+    const link=el('a','Получить API-ключ OpenRouter');link.href='https://openrouter.ai/keys';link.target='_blank';link.rel='noopener noreferrer';d.body.append(link)
+    const key=el('input','');key.type='password';key.autocomplete='off';key.placeholder='Пусто — сохранить прежний';key.setAttribute('aria-label','Новый API-ключ')
+    fieldLabel(d.body,'Новый API-ключ',key)
+    const fields={}
+    for(const [name,label] of Object.entries({model:'Текст и классификация',embeddingModel:'Эмбеддинги',visionModel:'Фото и OCR'})){
+      const input=el('input','');input.value=config[name];input.placeholder=config.recommended[name];input.setAttribute('aria-label',label)
+      fieldLabel(d.body,label,input);fields[name]=input
+    }
+    d.body.append(el('p','Пустое поле модели отключает соответствующую серверную функцию. Новый ключ проверяется без передачи заметок.'))
+    d.body.append(knowledgeButton('Рекомендуемые модели',()=>{for(const [name,input] of Object.entries(fields))input.value=config.recommended[name]}))
+    let writing=false
+    async function save(action){
+      if(writing)return
+      writing=true
+      const body={revision:config.revision,keyAction:action,...Object.fromEntries(Object.entries(fields).map(([name,input])=>[name,input.value.trim()]))}
+      if(action==='replace')body.apiKey=key.value.trim()
+      key.value=''
+      try{
+        await api('/api/ai/config','PUT',body)
+        if(d.active()){d.close();alertText('OpenRouter настроен','Настройки сохранены на сервере без перезапуска.')}
+      }finally{writing=false;delete body.apiKey}
+    }
+    d.body.append(knowledgeButton('Сохранить на сервере',()=>save(key.value.trim()?'replace':'keep')))
+    d.body.append(knowledgeButton('Проверить сохранённый ключ',async()=>{
+      await api('/api/ai/config/test','POST',{})
+      if(d.active())d.status('OpenRouter подтвердил ключ.')
+    }))
+    if(config.configured)d.body.append(knowledgeButton('Отключить ключ на сервере',()=>{
+      if(confirm('Отключить OpenRouter для всех устройств? Локальные функции останутся.'))return save('remove')
+    }))
+  }catch(e){if(d.active())d.status(e.message)}
 }
 
 function start() {
@@ -733,7 +849,7 @@ function start() {
   const compact=()=>{libraryTools.open=!mobile.matches;if(mobile.matches)$('editor-tools').open=false}
   compact();mobile.addEventListener('change',compact)
   const closeTools=()=>{if(mobile.matches)libraryTools.open=false}
-  for(const id of ['connect','ai-search','trash','import','backup-import','backup-export']){
+  for(const id of ['connect','processing-settings','ai-search','trash','import','backup-import','backup-export']){
     $(id).addEventListener('click',closeTools)
   }
   document.addEventListener('click',event=>{if(!libraryTools.contains(event.target))closeTools()})
@@ -835,6 +951,7 @@ function start() {
       a.href=url;a.download=name+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
     }catch(e){report(e)}
   }
+  $('processing-settings').onclick=processingSettings
   $('ai-analyze').onclick = analyzeNote
   $('ai-search').onclick = semanticDialog
   $('ai-links').onclick = suggestLinks
@@ -887,8 +1004,9 @@ function start() {
     catch(e) { report(e) } finally { $('file').value = '' }
   }
   $('summary').onclick = async () => {
-    const n = notes.get(selected)
-    if (n.dirty || !token) return alertText('Сначала синхронизируйте заметку','OpenRouter получает сохранённую на вашем сервере версию.')
+    const mode=processingMode('summary');if(!mode)return
+    const n=pinnedSelection(mode==='local');if(!n)return
+    if(mode==='local')return alertText('Краткое содержание · локальные фразы',localSummary(n.text))
     if (!confirm('Передать OpenRouter первые 12 000 символов заметки для краткого пересказа? Запрос может быть платным.')) return
     try { const r = await api('/api/summary','POST',{id:n.id,revision:n.base,consent:true}); alertText(r.truncated?'Резюме первых 12 000 символов':'Резюме',r.summary) } catch(e) {report(e)}
   }

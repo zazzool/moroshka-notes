@@ -48,7 +48,7 @@ internal class LocalOcr(context:Context) {
         try{
             check(tess.init(root.absolutePath,"rus+eng",TessBaseAPI.OEM_LSTM_ONLY)){"Не удалось запустить OCR"}
             tess.setImage(bitmap)
-            return tess.utF8Text.orEmpty().trim().take(64000)
+            return tess.getUTF8Text().orEmpty().trim().take(64000)
         }finally{tess.recycle();bitmap.recycle()}
     }
 }

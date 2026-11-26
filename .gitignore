@@ -9,3 +9,5 @@ release/
 
 .kotlin/
 .cloud-tools/
+
+web/ocr-v1/

@@ -14,6 +14,7 @@ const assets = new Map([
   ['/sync-pull.mjs', ['sync-pull.mjs', 'text/javascript']],
   ['/knowledge.mjs', ['knowledge.mjs', 'text/javascript']],
   ['/markdown.mjs', ['markdown.mjs', 'text/javascript']],
+  ['/processing.mjs',['processing.mjs','text/javascript']], ['/local-ocr.mjs',['local-ocr.mjs','text/javascript']],
   ['/media-format.mjs', ['media-format.mjs', 'text/javascript']],
   ['/media-store.mjs', ['media-store.mjs', 'text/javascript']],
   ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
@@ -100,6 +101,14 @@ export function application(options, request = fetch) {
     try {
       const { pathname, searchParams } = new URL(req.url, 'http://localhost')
       const get = req.method === 'GET'
+      if(get&&/^\/ocr-v1\/(?:tesseract\.min\.js|worker\.min\.js|tesseract-core-(?:simd-)?lstm\.wasm(?:\.js)?|(?:rus|eng)\.traineddata|(?:tesseract-js|tesseract-core|tessdata)-LICENSE\.txt)$/.test(pathname)){
+        let bytes
+        try{bytes=readFileSync(new URL('../web'+pathname,import.meta.url))}
+        catch(e){if(e.code==='ENOENT')throw new ApiError(404,'Локальный OCR не установлен');throw e}
+        if(pathname.endsWith('/worker.min.js'))res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'")
+        const type=pathname.endsWith('.js')?'text/javascript':pathname.endsWith('.wasm')?'application/wasm':pathname.endsWith('.txt')?'text/plain':'application/octet-stream'
+        res.writeHead(200,{'Content-Type':type});return res.end(bytes)
+      }
       if (get && assets.has(pathname)) {
         const [name, type] = assets.get(pathname)
         const file = readFileSync(new URL('../web/' + name, import.meta.url))
