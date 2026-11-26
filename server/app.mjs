@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
 import { intelligence } from './intelligence.mjs'
+import { openRouterConfig } from './openrouter-config.mjs'
 import { mcpResponse } from './mcp.mjs'
 import { openMedia } from './media.mjs'
 
@@ -58,7 +59,8 @@ export function application(options, request = fetch) {
   if (mcpToken && (mcpToken.length < 24 || mcpToken === token || mcpToken === actionsToken)) throw Error('Нужен отдельный MCP_TOKEN длиной от 24 символов')
   const vault = openVault(dir)
   const media = openMedia(dir)
-  const ai = intelligence({vault,dir,key:openrouterKey,model,embeddingModel,visionModel,media,request})
+  const configuration = openRouterConfig({dir,key:openrouterKey,model,embeddingModel,visionModel,request})
+  const ai = intelligence({vault,dir,configuration,media,request})
   // Pairing requests are short-lived and live only in this process.
   const pairing = new Map()
   function cleanPairing() {
@@ -211,6 +213,17 @@ export function application(options, request = fetch) {
           const removed=vault.remove(id,base)
           ai.invalidate(id)
           return json(res, 200, removed)
+        }
+        if (pathname==='/api/ai/config') {
+          if(get)return json(res,200,configuration.status())
+          if(req.method==='PUT'){
+            if(!sameOrigin(req))throw new ApiError(403,'Origin отклонён')
+            return json(res,200,await ai.configure(await payload(req)))
+          }
+        }
+        if(req.method==='POST'&&pathname==='/api/ai/config/test'){
+          if(!sameOrigin(req))throw new ApiError(403,'Origin отклонён')
+          return json(res,200,await ai.testConnection())
         }
         if (get && pathname === '/api/ai/status') return json(res,200,ai.status())
         if (req.method === 'POST' && pathname === '/api/ai/analyze') return json(res,200,await ai.analyze(await payload(req)))
