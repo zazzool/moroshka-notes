@@ -225,11 +225,103 @@ def incremental_check(origin, browser):
     ctx.close()
 
 
+def set_processing(page, **values):
+    if not page.locator("#library-tools").evaluate("(el)=>el.open"):
+        page.locator("#library-tools > summary").click()
+    page.locator("#processing-settings").click()
+    labels={"metadata":"Заголовки, теги и тип","summary":"Краткое содержание",
+            "search":"Расширенный поиск","links":"Предложения связей","ocr":"Распознавание фото"}
+    for operation, value in values.items():
+        page.get_by_label(labels[operation],exact=True).select_option(value)
+    page.get_by_role("button",name="Сохранить режимы").click()
+    expect(page.locator("#knowledge-status")).to_have_text("Режимы сохранены на этом устройстве.")
+    page.locator("#knowledge-dialog").get_by_role("button",name="Закрыть",exact=True).click()
+
+
+def processing_check(origin, browser):
+    ctx=browser.new_context()
+    page=ctx.new_page()
+    page.goto(origin)
+    page.evaluate("navigator.serviceWorker.ready")
+    page.locator("#new").click()
+    original="# Заметка\n\nПроект исследования сна. Режим сна. Сон и память."
+    page.get_by_label("Markdown").fill(original)
+    calls=[]
+    page.on("request",lambda req: calls.append(req.url) if "/api/ai/" in req.url or "/api/summary" in req.url else None)
+    ctx.set_offline(True)
+    page.locator("#ai-analyze").click()
+    expect(page.locator("#knowledge-title")).to_have_text("Предложения · локальные правила")
+    expect(page.get_by_text("Тип: Проект")).to_be_visible()
+    page.get_by_role("button",name="Принять все").click()
+    assert "Проект исследования сна" in page.get_by_label("Markdown").input_value()
+    page.locator("#summary").click()
+    expect(page.locator("#msgTitle")).to_have_text("Краткое содержание · локальные фразы")
+    page.get_by_role("button",name="Закрыть",exact=True).click()
+    page.get_by_role("button",name="Закрыть редактор").click()
+    page.locator("#ai-search").click()
+    expect(page.locator("#knowledge-title")).to_have_text("Расширенный поиск · локально")
+    page.get_by_label("Локальный запрос").fill("сон")
+    page.locator("#knowledge-dialog").get_by_role("button",name="Найти",exact=True).click()
+    expect(page.locator(".knowledge-results button")).to_have_count(1)
+    page.locator("#knowledge-dialog").get_by_role("button",name="Закрыть",exact=True).click()
+    assert calls==[]
+    set_processing(page,metadata="off")
+    page.locator("#items .note").first.click()
+    page.locator("#ai-analyze").click()
+    expect(page.locator("#msgTitle")).to_have_text("Операция выключена")
+    page.get_by_role("button",name="Закрыть",exact=True).click()
+    ctx.set_offline(False)
+    page.get_by_role("button",name="Закрыть редактор").click()
+    connect(page)
+    page.locator("#processing-settings").click()
+    page.get_by_role("button",name="Настроить OpenRouter на сервере").click()
+    expect(page.locator("#knowledge-title")).to_have_text("OpenRouter · сервер")
+    expect(page.get_by_label("Текст и классификация",exact=True)).to_have_value("openai/gpt-4.1-mini")
+    page.get_by_label("Текст и классификация",exact=True).fill("test/changed")
+    page.get_by_role("button",name="Сохранить на сервере").click()
+    expect(page.locator("#msgTitle")).to_have_text("OpenRouter настроен")
+    page.get_by_role("button",name="Закрыть",exact=True).click()
+    saved=ctx.request.get(origin+"/api/ai/config",headers={"Authorization":"Bearer "+KEY}).json()
+    assert saved["model"]=="test/changed" and not saved["configured"]
+    # Local OCR uses the actual WASM engine. First load model files, then run
+    # recognition offline in a fresh page to prove that no provider is called.
+    page.locator("#processing-settings").click()
+    page.once("dialog",lambda dialog:dialog.accept())
+    page.get_by_role("button",name="Установить локальный OCR").click()
+    expect(page.locator("#knowledge-status")).to_have_text("Локальное распознавание готово.",timeout=120000)
+    page.locator("#knowledge-dialog").get_by_role("button",name="Закрыть",exact=True).click()
+    page.evaluate("navigator.serviceWorker.ready")
+    page.reload()
+    page.wait_for_function("navigator.serviceWorker.controller !== null")
+    image=page.evaluate("""async()=>{const c=document.createElement('canvas');c.width=1200;c.height=300;
+      const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);
+      ctx.font='64px sans-serif';ctx.fillStyle='black';ctx.fillText('HELLO WORLD',60,110);
+      ctx.fillText('ПРИВЕТ МИР',60,220);return c.toDataURL('image/jpeg').split(',')[1]}""")
+    import base64
+    ctx.set_offline(True)
+    page.locator("#capture-photo").click()
+    page.locator("#photo-source").get_by_role("button",name="Отмена").click()
+    page.locator("#photo-file").set_input_files({"name":"ocr.jpg","mimeType":"image/jpeg","buffer":base64.b64decode(image)})
+    expect(page.locator("#note-photos .photo-tile")).to_have_count(1)
+    page.locator("#recognize-photo").click()
+    expect(page.locator("#photo-status")).to_have_text("Фотография сохранена")
+    calls.clear()
+    page.locator("#ocr-start").click()
+    expect(page.locator("#ocr-result")).to_be_visible(timeout=120000)
+    recognized=page.locator("#ocr-text").input_value().upper()
+    assert "HELLO" in recognized and "ПРИВЕТ" in recognized, recognized
+    assert calls==[]
+    page.locator("#ocr-accept").click()
+    assert "HELLO" in page.get_by_label("Markdown").input_value().upper()
+    ctx.close()
+
+
 def knowledge_check(origin, browser):
     ctx = browser.new_context(service_workers="block")
     page = ctx.new_page()
     page.goto(origin)
     connect(page)
+    set_processing(page,metadata="server",search="server",links="server")
     page.locator("#new").click()
     text="# Проверка ИИ\n\nИсходный текст #ручной"
     page.get_by_label("Markdown").fill(text)
@@ -365,6 +457,7 @@ def photo_check(origin, browser):
     connect(page)
     second=browser.new_context()
     other=second.new_page();other.goto(origin);connect(other)
+    set_processing(other,ocr="server")
     other.locator("#items .note").filter(has_text="Текст рядом с изображением").click()
     expect(other.locator("#note-photos .photo-tile")).to_have_count(1)
     other.locator("#note-photos button").first.click()
@@ -492,6 +585,7 @@ def check(origin, directory):
         knowledge_check(origin, browser)
         recovery_check(origin, browser, directory)
         photo_check(origin, browser)
+        processing_check(origin, browser)
         browser.close()
 
 

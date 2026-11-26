@@ -455,7 +455,7 @@ function processingMode(op){
   return mode
 }
 let knowledgeGeneration=0
-function knowledgeDialog(titleText,serverRequired=true){
+function knowledgeDialog(titleText,serverRequired=true,reuse=false){
   if(busy)return null
   if(serverRequired&&!token){alertText('Подключите сервер','Настройте сервер для этой операции.');return null}
   try{persistEditor()}catch(e){report(e);return null}
@@ -463,7 +463,7 @@ function knowledgeDialog(titleText,serverRequired=true){
   $('knowledge-title').textContent=titleText
   $('knowledge-status').textContent='Загрузка…'
   $('knowledge-body').replaceChildren()
-  dialog.showModal()
+  if(!reuse)dialog.showModal()
   return {active:()=>dialog.open&&knowledgeGeneration===gen,status:text=>$('knowledge-status').textContent=text,
     body:$('knowledge-body'),close:()=>dialog.close()}
 }
@@ -778,7 +778,7 @@ function processingSettings(){
     localStorage.setItem(processingKey,JSON.stringify(value));routes=value
     d.status('Режимы сохранены на этом устройстве.')
   }))
-  d.body.append(knowledgeButton('Настроить OpenRouter на сервере',()=>{d.close();setTimeout(openRouterSettings,0)}))
+  d.body.append(knowledgeButton('Настроить OpenRouter на сервере',()=>{if(!token){d.close();alertText('Подключите сервер','Сначала подключите свой сервер.');return}return openRouterSettings(true)}))
   d.body.append(knowledgeButton('Установить локальный OCR',async()=>{
     if(await ocrReady()){d.status('Русский и английский OCR уже установлен.');return}
     if(!confirm('Загрузить OCR-движок и языковые пакеты с вашего сервера? Фото не отправляются.'))return
@@ -786,8 +786,8 @@ function processingSettings(){
     if(d.active())d.status('Локальное распознавание готово.')
   }))
 }
-async function openRouterSettings(){
-  const d=knowledgeDialog('OpenRouter · сервер');if(!d)return
+async function openRouterSettings(reuse=false){
+  const d=knowledgeDialog('OpenRouter · сервер',true,reuse);if(!d)return
   try{
     const config=await api('/api/ai/config');if(!d.active())return
     d.status(config.configured?'API-ключ настроен на сервере.':'OpenRouter не подключён.')

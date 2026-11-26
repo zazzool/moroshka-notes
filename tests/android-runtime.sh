@@ -77,9 +77,29 @@ done
 adbc install -r "$app"
 adbc install -r "$test_apk"
 runner='app.moroshka.notes.debug.test/app.moroshka.notes.SmokeRunner'
-for fixture in recoveryFixture backupFixture historyFixture incrementalFixture knowledgeFixture syncGateFixture photoFixture designFixture default; do
+echo "Download pinned OCR language data for the offline native test"
+modeldir="$sandbox/models"
+mkdir -p "$modeldir"
+modelbase='https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/65727574dfcd264acbb0c3e07860e4e9e9b22185'
+for language in eng rus; do
+  curl --fail --retry 3 --connect-timeout 15 --max-time 90 -o "$modeldir/$language.traineddata" "$modelbase/$language.traineddata"
+done
+(cd "$modeldir"; printf '%s\n' \
+  '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  eng.traineddata' \
+  'e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225  rus.traineddata' | sha256sum -c -)
+for language in eng rus; do
+  adbc push "$modeldir/$language.traineddata" "/data/local/tmp/moroshka-$language.traineddata"
+  adbc shell chmod 644 "/data/local/tmp/moroshka-$language.traineddata"
+done
+for fixture in recoveryFixture backupFixture historyFixture incrementalFixture knowledgeFixture syncGateFixture photoFixture processingFixture designFixture default; do
   echo "Running $fixture"
   adbc shell pm clear app.moroshka.notes.debug | grep -Fx Success
+  if [[ "$fixture" == processingFixture ]]; then
+    adbc shell run-as app.moroshka.notes.debug mkdir -p files/tesseract-v1/tessdata
+    for language in eng rus; do
+      adbc shell run-as app.moroshka.notes.debug cp "/data/local/tmp/moroshka-$language.traineddata" "files/tesseract-v1/tessdata/$language.traineddata"
+    done
+  fi
   if [[ "$fixture" == default ]]; then
     args=()
   else
