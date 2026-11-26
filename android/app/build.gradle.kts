@@ -11,8 +11,8 @@ android {
         testInstrumentationRunner = "app.moroshka.notes.SmokeRunner"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.1.0-alpha.11"
+        versionCode = 12
+        versionName = "0.1.0-alpha.12"
         resValue("string", "moroshka_app_name", "Морошка")
     }
     buildTypes {
@@ -39,6 +39,7 @@ android {
 dependencies {
     implementation("com.github.mwiede:jsch:2.28.2")
     implementation("androidx.core:core:1.15.0")
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
 }
 
 val prepareServer by tasks.registering(Sync::class) {

@@ -28,6 +28,8 @@ class MainActivity : Activity() {
     private lateinit var vault: Vault
     private lateinit var root: LinearLayout
     private val settings by lazy { getSharedPreferences("connection", MODE_PRIVATE) }
+    private val processing by lazy { ProcessingPrefs(this) }
+    private val localOcr by lazy { LocalOcr(applicationContext) }
     private val worker = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var current: String? = null
@@ -389,7 +391,7 @@ class MainActivity : Activity() {
 
     private fun searchContent(content: LinearLayout) {
         section(content, "Поиск")
-        content.addView(button("Смысловой поиск") { showSemanticSearch() }.apply { icon(R.drawable.icon_sparkles) },
+        content.addView(button("Расширенный поиск") { showSemanticSearch() }.apply { icon(R.drawable.icon_sparkles) },
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(8) })
         val field = EditText(this).apply {
             hint = "Найти мысль или тему"
@@ -558,7 +560,7 @@ class MainActivity : Activity() {
         }
     }
     private fun menu() {
-        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива", "Корзина на устройстве", "Синхронизация")) { _, index ->
+        AlertDialog.Builder(this).setItems(arrayOf("Импорт .md", "Папка для сохранения", "Удалить заметки", "Подключить другое устройство", "Развернуть свой сервер", "Настроить сервер", "Сохранить архив библиотеки", "Восстановить из архива", "Корзина на устройстве", "Синхронизация", "Обработка заметок и OpenRouter")) { _, index ->
             if (index == 0) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 1)
             else if (index == 1) startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), 4)
@@ -583,7 +585,8 @@ class MainActivity : Activity() {
                             .addCategory(Intent.CATEGORY_OPENABLE), 7)
                     }.show()
             } else if(index==8) safely { showTrash() }
-            else safely { syncSettings() }
+            else if(index==9) safely { syncSettings() }
+            else safely { processingSettings() }
         }.show()
     }
 
@@ -668,7 +671,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         bar.addView(button("") {
             flush()
-            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом", "История на устройстве", "Предложения ИИ", "Смысловые связи", "Экспорт заметки с вложениями")) { _, index ->
+            AlertDialog.Builder(this).setItems(arrayOf("Изменить заголовок", "Теги", "Удалить связь", "Локальный граф", "Экспорт .md", "Поделиться текстом", "История на устройстве", "Предложения ИИ", "Предложения связей", "Экспорт заметки с вложениями", "Краткое содержание")) { _, index ->
                 safely {
                     when (index) {
                         0 -> renameTitle()
@@ -691,6 +694,7 @@ class MainActivity : Activity() {
                                 .addCategory(Intent.CATEGORY_OPENABLE)
                                 .putExtra(Intent.EXTRA_TITLE, vault.read(note.id).title.replace('/', '_').take(100) + ".moroshka.json"), 10)
                         }
+                        10 -> showSummary()
                     }
                 }
             }.show()
@@ -840,32 +844,158 @@ class MainActivity : Activity() {
         dialog.setOnDismissListener{image.setImageDrawable(null);bitmap.recycle()}
         dialog.show()
     }
+    private fun reviewOcr(note:Note,id:String,reply:org.json.JSONObject,local:Boolean){
+        knowledgeUnchanged(note)
+        check(reply.getString("id")==id)
+        val text=reply.getString("text")
+        if(text.isBlank()){notice("Читаемый текст не обнаружен. Фотография сохранена.");return}
+        val field=EditText(this).apply{setText(text);minLines=4;maxLines=10;gravity=android.view.Gravity.TOP}
+        AlertDialog.Builder(this).setTitle(if(local)"OCR · локально, проверьте текст" else if(reply.optBoolean("possiblyTruncated"))"OCR · возможно неполный текст" else "OCR · сервер, проверьте текст")
+            .setView(field).setNegativeButton("Отмена",null)
+            .setPositiveButton("Добавить в заметку"){_,_->safely{
+                knowledgeUnchanged(note)
+                editor?.setText(editor?.text.toString()+"\n\n"+field.text.toString())
+                flush()
+            }}.show()
+    }
     private fun recognizePhoto(id:String,noteId:String){
         val note=knowledgeSource()?:return
         require(note.id==noteId&&id in PhotoStore.refs(note.text))
-        AlertDialog.Builder(this).setTitle("Распознавание текста")
-            .setMessage("Передать сохранённую фотографию вашему серверу и настроенной модели OpenRouter? Запрос может быть платным. Результат нужно проверить.")
-            .setNegativeButton("Отмена",null).setPositiveButton("Распознать"){_,_->safely{
-                knowledgeRequest("/api/ai/ocr",org.json.JSONObject().put("id",id).put("consent",true),
-                    prepare={api->vault.photos.push(PhotoStore.append("",id),{path,data,method->api.request(path,data,method)})}){reply->
-                    knowledgeUnchanged(note)
-                    check(reply.getString("id")==id)
-                    val text=reply.getString("text")
-                    if(text.isBlank()){notice("Модель не обнаружила читаемого текста. Фотография сохранена.");return@knowledgeRequest}
-                    val field=EditText(this).apply{
-                        setText(text);minLines=4;maxLines=10
-                        gravity=android.view.Gravity.TOP
+        when(mode("ocr")){
+            "local" -> installLocalOcr {
+                knowledgeUnchanged(note)
+                localWork("Распознавание текста",{
+                    val bytes=requireNotNull(vault.photos.read(id)){"Фото не найдено"}
+                    org.json.JSONObject().put("id",id).put("text",localOcr.recognize(bytes))
+                }){reviewOcr(note,id,it,true)}
+            }
+            "server" -> AlertDialog.Builder(this).setTitle("Распознавание текста")
+                .setMessage("Передать сохранённую фотографию вашему серверу и модели OpenRouter? Запрос может быть платным.")
+                .setNegativeButton("Отмена",null).setPositiveButton("Распознать"){_,_->
+                    knowledgeRequest("/api/ai/ocr",org.json.JSONObject().put("id",id).put("consent",true),
+                        prepare={api->vault.photos.push(PhotoStore.append("",id),{path,data,method->api.request(path,data,method)})}){reviewOcr(note,id,it,false)}
+                }.show()
+        }
+    }
+
+    private fun processingSettings(){
+        val content=column().apply{setPadding(dp(16),dp(8),dp(16),dp(8))}
+        content.addView(label("Настройки этого устройства. Серверный режим требует отдельного разрешения перед отправкой данных.",14f))
+        val controls=linkedMapOf<String,Spinner>()
+        for((op,name) in ProcessingPrefs.operations){
+            content.addView(label(name,15f).apply{setPadding(0,dp(12),0,0)})
+            val spinner=Spinner(this).apply{
+                adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,ProcessingPrefs.labels)
+                setSelection(ProcessingPrefs.modes.indexOf(processing.mode(op)))
+                minimumHeight=dp(48)
+                contentDescription=name
+            }
+            controls[op]=spinner;content.addView(spinner)
+        }
+        content.addView(label("Локально: правила классификации, извлечение фраз, поиск и связи по словам, OCR Tesseract (русский + английский). Не языковая модель.",13f).apply{setTextColor(muted)})
+        val dialog=AlertDialog.Builder(this).setTitle("Обработка заметок").setView(ScrollView(this).apply{addView(content)})
+            .setNegativeButton("Отмена",null)
+            .setPositiveButton("Сохранить"){_,_->safely{
+                processing.save(controls.mapValues{ProcessingPrefs.modes[it.value.selectedItemPosition]})
+                notice("Настройки обработки сохранены.")
+            }}
+            .setNeutralButton("По умолчанию",null).create()
+        content.addView(button("Настроить OpenRouter на сервере"){
+            dialog.dismiss();showOpenRouterSettings()
+        })
+        content.addView(button("Языковые пакеты локального OCR"){
+            dialog.dismiss();installLocalOcr()
+        })
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener{controls.values.forEach{it.setSelection(0)}}
+    }
+    private fun showOpenRouterSettings(){
+        knowledgeRequest("/api/ai/config"){config->
+            val content=column().apply{setPadding(dp(16),dp(8),dp(16),dp(8))}
+            content.addView(label(if(config.getBoolean("configured"))"Ключ настроен на сервере" else "OpenRouter не подключён",16f))
+            content.addView(label("Ключ не сохраняется в приложении. Изменения действуют на всех устройствах этого сервера.",13f).apply{setTextColor(muted)})
+            content.addView(button("Получить API-ключ"){
+                startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://openrouter.ai/keys")))
+            })
+            val key=EditText(this).apply{
+                hint="Новый API-ключ (пусто — сохранить прежний)"
+                setSingleLine();inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                isSaveEnabled=false
+                if(android.os.Build.VERSION.SDK_INT>=26)importantForAutofill=View.IMPORTANT_FOR_AUTOFILL_NO
+            }
+            content.addView(key)
+            val models=linkedMapOf<String,EditText>()
+            val names=linkedMapOf("model" to "Текст и классификация","embeddingModel" to "Эмбеддинги","visionModel" to "Фото и OCR")
+            for((field,title) in names){
+                content.addView(label(title,14f).apply{setPadding(0,dp(12),0,0)})
+                val input=EditText(this).apply{setSingleLine();setText(config.getString(field));contentDescription=title;hint=config.getJSONObject("recommended").getString(field)}
+                models[field]=input;content.addView(input)
+            }
+            content.addView(button("Рекомендуемые модели"){models.forEach{(name,field)->field.setText(config.getJSONObject("recommended").getString(name))}})
+            content.addView(label("Пустое поле модели отключает соответствующие функции на сервере. Сохранение нового ключа проверяет его через OpenRouter. Тест ключа не отправляет заметки.",13f).apply{setTextColor(muted)})
+            fun save(action:String){
+                val request=org.json.JSONObject().put("revision",config.getString("revision")).put("keyAction",action)
+                models.forEach{(name,field)->request.put(name,field.text.toString().trim())}
+                if(action=="replace")request.put("apiKey",key.text.toString().trim())
+                key.text.clear()
+                knowledgeRequest("/api/ai/config",request,"PUT"){notice("Настройки OpenRouter сохранены на сервере. Перезапуск не нужен.")}
+            }
+            val dialog=AlertDialog.Builder(this).setTitle("OpenRouter · сервер").setView(ScrollView(this).apply{addView(content)})
+                .setNegativeButton("Отмена",null).setPositiveButton("Сохранить"){_,_->safely{
+                    save(if(key.text.toString().isBlank())"keep" else "replace")
+                }}.create()
+            content.addView(button("Проверить сохранённый ключ"){dialog.dismiss();knowledgeRequest("/api/ai/config/test",org.json.JSONObject()){notice("OpenRouter подтвердил ключ.")}})
+            if(config.getBoolean("configured"))content.addView(button("Отключить ключ на сервере"){
+                AlertDialog.Builder(this).setMessage("Отключить OpenRouter для всех устройств? Локальная обработка останется доступной.")
+                    .setNegativeButton("Отмена",null).setPositiveButton("Отключить"){_,_->safely{dialog.dismiss();save("remove")}}.show()
+            })
+            dialog.setOnDismissListener{key.text.clear()}
+            // Positive button captures the value before the dialog's dismiss callback.
+            dialog.show()
+        }
+    }
+    private fun localWork(message:String,operation:()->org.json.JSONObject,result:(org.json.JSONObject)->Unit){
+        if(syncing)return
+        val progress=AlertDialog.Builder(this).setTitle(message).setMessage("На этом устройстве…").setCancelable(false).create()
+        progress.show();syncing=true
+        worker.execute{
+            val response=runCatching(operation)
+            runOnUiThread{
+                if(isDestroyed)return@runOnUiThread
+                syncing=false;progress.dismiss()
+                response.onSuccess{safely{result(it)}}.onFailure{notice(it.message?:"Не удалось выполнить локальную обработку")}
+                val shared=pendingShare
+                if(shared!=null){pendingShare=null;safely{flush();edit(vault.create(shared))}}
+                releaseBackground()
+            }
+        }
+    }
+    private fun installLocalOcr(after:(()->Unit)?=null){
+        if(localOcr.ready()){if(after!=null)after() else notice("Русский и английский пакеты OCR уже установлены.");return}
+        AlertDialog.Builder(this).setTitle("Локальное распознавание")
+            .setMessage("Загрузить языковые пакеты Tesseract (русский и английский, около 8 МБ) из официального репозитория? Фотографии не отправляются. После загрузки OCR работает без сети.")
+            .setNegativeButton("Отмена",null).setPositiveButton("Загрузить"){_,_->
+                localWork("Установка OCR",{localOcr.install();org.json.JSONObject()}){if(after!=null)after() else notice("Локальное OCR готово.")}
+            }.show()
+    }
+    private fun mode(op:String):String?{
+        val value=processing.mode(op)
+        if(value=="off"){notice("Операция выключена. Измените режим в разделе «Обработка заметок».");return null}
+        return value
+    }
+    private fun showSummary(){
+        val note=knowledgeSource()?:return
+        when(mode("summary")){
+            "local" -> localWork("Краткое содержание",{org.json.JSONObject().put("summary",LocalProcessing.summary(note.text))}){reply->
+                knowledgeUnchanged(note);notice("Извлечение ключевых фраз · локально\n\n"+reply.getString("summary"))
+            }
+            "server" -> AlertDialog.Builder(this).setMessage("Передать OpenRouter до 12 000 символов этой заметки? Возможна оплата.")
+                .setNegativeButton("Отмена",null).setPositiveButton("Продолжить"){_,_->
+                    knowledgeRequest("/api/summary",org.json.JSONObject().put("id",note.id).put("revision",KnowledgeApi.revision(note.text)).put("consent",true)){
+                        knowledgeUnchanged(note);notice("Резюме OpenRouter\n\n"+it.getString("summary"))
                     }
-                    AlertDialog.Builder(this).setTitle(if(reply.optBoolean("possiblyTruncated"))"Распознанный текст · возможно неполный" else "Проверьте распознанный текст")
-                        .setView(field).setNegativeButton("Отмена",null)
-                        .setPositiveButton("Добавить в заметку"){_,_->safely{
-                            knowledgeUnchanged(note)
-                            val currentText=editor?.text?.toString().orEmpty()
-                            editor?.setText(currentText+"\n\n"+field.text.toString())
-                            flush()
-                        }}.show()
-                }
-            }}.show()
+                }.show()
+        }
     }
 
     private fun knowledgeRequest(path: String, data: org.json.JSONObject? = null,
@@ -901,38 +1031,51 @@ class MainActivity : Activity() {
         flush()
         check(current == note.id && vault.read(note.id).text == note.text) { "Заметка изменилась. Повторите запрос." }
     }
-    private fun showAiSuggestions() {
-        val note = knowledgeSource() ?: return
-        val revision = KnowledgeApi.revision(note.text)
-        AlertDialog.Builder(this).setTitle("Предложения ИИ")
-            .setMessage("Передать OpenRouter до 12 000 символов этой заметки? Запрос может быть платным. Сначала синхронизируйте её.")
-            .setNegativeButton("Отмена",null).setPositiveButton("Анализировать") { _,_ -> safely {
-                knowledgeRequest("/api/ai/analyze",org.json.JSONObject().put("id",note.id).put("revision",revision).put("consent",true)) { reply ->
-                    knowledgeUnchanged(note)
-                    check(reply.getString("id")==note.id && reply.getString("revision")==revision)
-                    val heading=reply.getString("title")
-                    val category=reply.getString("category")
-                    val array=reply.getJSONArray("tags")
-                    val tags=(0 until array.length()).map { array.getString(it) }
-                    KnowledgeApi.metadata(note.text,heading,tags,category)
-                    val choices=listOf("Заголовок: "+heading,"Тип: "+KnowledgeApi.labels.getValue(category))+tags.map { "#"+it }
-                    val selected=BooleanArray(choices.size)
-                    fun accept(all:Boolean) {
-                        knowledgeUnchanged(note)
-                        val updated=KnowledgeApi.metadata(note.text,if(all||selected[0])heading else null,
-                            tags.filterIndexed { i,_ -> all||selected[i+2] },if(all||selected[1])category else null)
-                        editor?.setText(PhotoStore.strip(updated))
-                        flush()
-                    }
-                    AlertDialog.Builder(this).setTitle(if(reply.optBoolean("truncated")) "Предложения ИИ · первые 12 000 символов" else "Предложения ИИ")
-                        .setMultiChoiceItems(choices.toTypedArray(),selected) { _,i,value -> selected[i]=value }
-                        .setNegativeButton("Отклонить",null)
-                        .setNeutralButton("Принять все"){_,_->safely{accept(true)}}
-                        .setPositiveButton("Принять выбранное"){_,_->safely{accept(false)}}.show()
-                }
-            }}.show()
+    private fun reviewSuggestions(note:Note,reply:org.json.JSONObject,local:Boolean){
+        knowledgeUnchanged(note)
+        check(reply.getString("id")==note.id && reply.getString("revision")==KnowledgeApi.revision(note.text))
+        val heading=reply.getString("title")
+        val category=reply.getString("category")
+        val array=reply.getJSONArray("tags")
+        val tags=(0 until array.length()).map{array.getString(it)}
+        KnowledgeApi.metadata(note.text,heading,tags,category)
+        val choices=listOf("Заголовок: "+heading,"Тип: "+KnowledgeApi.labels.getValue(category))+tags.map{"#"+it}
+        val selected=BooleanArray(choices.size)
+        fun accept(all:Boolean){
+            knowledgeUnchanged(note)
+            val updated=KnowledgeApi.metadata(note.text,if(all||selected[0])heading else null,
+                tags.filterIndexed{i,_->all||selected[i+2]},if(all||selected[1])category else null)
+            editor?.setText(PhotoStore.strip(updated));flush()
+        }
+        AlertDialog.Builder(this).setTitle(if(local)"Предложения · локальные правила" else if(reply.optBoolean("truncated"))"Предложения ИИ · первые 12 000 символов" else "Предложения ИИ · сервер")
+            .setMultiChoiceItems(choices.toTypedArray(),selected){_,i,v->selected[i]=v}
+            .setNegativeButton("Отклонить",null)
+            .setNeutralButton("Принять все"){_,_->safely{accept(true)}}
+            .setPositiveButton("Принять выбранное"){_,_->safely{accept(false)}}.show()
+    }
+    private fun showAiSuggestions(){
+        val note=knowledgeSource()?:return
+        when(mode("metadata")){
+            "local" -> localWork("Предложения",{LocalProcessing.metadata(note)}){reviewSuggestions(note,it,true)}
+            "server" -> AlertDialog.Builder(this).setTitle("Предложения ИИ")
+                .setMessage("Передать OpenRouter до 12 000 символов этой заметки? Запрос может быть платным. Сначала синхронизируйте её.")
+                .setNegativeButton("Отмена",null).setPositiveButton("Анализировать"){_,_->
+                    knowledgeRequest("/api/ai/analyze",org.json.JSONObject().put("id",note.id).put("revision",KnowledgeApi.revision(note.text)).put("consent",true)){reviewSuggestions(note,it,false)}
+                }.show()
+        }
     }
     private fun showSemanticSearch() {
+        val selectedMode=mode("search")?:return
+        if(selectedMode=="local"){
+            val input=EditText(this).apply{hint="Слова или фраза";setSingleLine()}
+            AlertDialog.Builder(this).setTitle("Расширенный поиск · локально").setView(input)
+                .setMessage("Ранжирование по совпадению слов, без отправки запроса на сервер.")
+                .setNegativeButton("Отмена",null).setPositiveButton("Найти"){_,_->safely{
+                    val query=input.text.toString().trim();require(query.isNotBlank()){"Введите запрос"}
+                    localWork("Поиск",{LocalProcessing.rank(query,vault.all())}){showKnowledgeResults(it,null,true)}
+                }}.show()
+            return
+        }
         knowledgeRequest("/api/ai/status") { status ->
             val enabled=status.optBoolean("enabled")
             val pending=status.getJSONArray("pending")
@@ -972,23 +1115,26 @@ class MainActivity : Activity() {
     }
     private fun showSemanticLinks() {
         val note=knowledgeSource() ?: return
-        knowledgeRequest("/api/ai/related",org.json.JSONObject().put("id",note.id)
-            .put("revision",KnowledgeApi.revision(note.text))){ reply -> showKnowledgeResults(reply,note) }
+        when(mode("links")){
+            "local" -> localWork("Предложения связей",{LocalProcessing.rank(PhotoStore.strip(note.text),vault.all(),note.id)}){showKnowledgeResults(it,note,true)}
+            "server" -> knowledgeRequest("/api/ai/related",org.json.JSONObject().put("id",note.id)
+                .put("revision",KnowledgeApi.revision(note.text))){ reply -> showKnowledgeResults(reply,note) }
+        }
     }
-    private fun showKnowledgeResults(reply: org.json.JSONObject,source:Note?) {
+    private fun showKnowledgeResults(reply: org.json.JSONObject,source:Note?,local:Boolean=false) {
         val array=reply.getJSONArray("notes")
-        if(array.length()==0)return notice("Похожих индексированных заметок пока нет.")
+        if(array.length()==0)return notice(if(local)"Совпадений по словам нет." else "Похожих индексированных заметок пока нет.")
         val results=(0 until array.length()).map{array.getJSONObject(it)}
         val titles=results.map{it.getString("title")}
         AlertDialog.Builder(this).setTitle(if(source==null)"Результаты поиска" else "Предложения смысловых связей")
             .setItems(titles.toTypedArray()){_,i->safely{
                 val row=results[i]
                 val target=vault.all().firstOrNull{it.id==row.getString("id")}
-                check(target!=null && KnowledgeApi.revision(target.text)==row.getString("revision")){"Сначала синхронизируйте целевую заметку."}
+                check(target!=null && KnowledgeApi.revision(target.text)==row.getString("revision")){"Целевая заметка изменилась. Повторите поиск."}
                 if(source==null)edit(target)
                 else {
                     knowledgeUnchanged(source)
-                    AlertDialog.Builder(this).setMessage("Добавить вики-ссылку на «"+target.title+"»? Это предложение на основе сходства эмбеддингов.")
+                    AlertDialog.Builder(this).setMessage("Добавить вики-ссылку на «"+target.title+"»? "+if(local)"Сходство слов." else "Сходство эмбеддингов.")
                         .setNegativeButton("Отмена",null).setPositiveButton("Связать"){_,_->safely{
                             knowledgeUnchanged(source)
                             val actual=vault.read(target.id)
