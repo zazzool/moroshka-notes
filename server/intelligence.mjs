@@ -31,9 +31,10 @@ function similarity(a,b){
   if(a.length!==b.length)return null
   return a.reduce((s,n,i)=>s+n*b[i],0)
 }
-export function intelligence({vault,dir,key,model,embeddingModel,visionModel,media,request=fetch}){
+export function intelligence({vault,dir,configuration,media,request=fetch}){
   const folder=join(dir,'semantic-v1')
-  const modelKey=createHash('sha256').update(embeddingModel||'').digest('hex')
+  let {key,model,embeddingModel,visionModel}=configuration.current()
+  let modelKey=createHash('sha256').update(embeddingModel||'').digest('hex')
   let active=false
   function pinned(id,revision){
     requireValue(typeof id==='string'&&validId.test(id)&&typeof revision==='string'&&hashPattern.test(revision),400,'Некорректная редакция')
@@ -46,7 +47,7 @@ export function intelligence({vault,dir,key,model,embeddingModel,visionModel,med
     let response
     try {response=await request('https://openrouter.ai/api/v1/'+path,{
       method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-      body:JSON.stringify({...body,provider:{...body.provider,...routing}}),signal:AbortSignal.timeout(45000)})
+      body:JSON.stringify({...body,provider:{...body.provider,...routing}}),signal:AbortSignal.timeout(45000),redirect:'error'})
     } catch {throw new ApiError(502,'OpenRouter недоступен')}
     requireValue(response.ok,502,'OpenRouter отклонил запрос. Проверьте доступность модели и настройки конфиденциальности.')
     // Do not allocate arbitrarily large provider responses or expose raw upstream errors.
@@ -78,6 +79,21 @@ export function intelligence({vault,dir,key,model,embeddingModel,visionModel,med
     active=true
     try{return await operation()}finally{active=false}
   }
+  // The same lock prevents configuration changes during paid operations.
+  async function configure(input){
+    return exclusive(async()=>{
+      const previous=embeddingModel
+      const status=await configuration.update(input)
+      ;({key,model,embeddingModel,visionModel}=configuration.current())
+      modelKey=createHash('sha256').update(embeddingModel||'').digest('hex')
+      if(previous!==embeddingModel){
+        // Old embeddings are never ranked under a new model, even if cleanup fails.
+        try{rmSync(folder,{recursive:true,force:true})}catch{console.warn('Не удалось очистить устаревший индекс')}
+      }
+      return status
+    })
+  }
+  async function testConnection(){return exclusive(()=>configuration.verify())}
   async function analyze({id,revision,consent}){
     requireValue(consent===true,400,'Требуется разрешение на передачу текста')
     requireValue(model,503,'Модель OpenRouter не настроена')
@@ -214,5 +230,5 @@ export function intelligence({vault,dir,key,model,embeddingModel,visionModel,med
     rmSync(folder,{recursive:true,force:true})
     return status()
   }
-  return {analyze,summarize,ocr,status,index,search,related,clear,invalidate}
+  return {analyze,summarize,ocr,status,index,search,related,clear,invalidate,configure,testConnection}
 }

@@ -195,3 +195,7 @@ h1{font-size:24px;margin:12px 0 8px}
   #reader .editorActions:has(#add-photo) button{padding:8px;font-size:13px;min-width:0}
   #reader .editorActions:has(#add-photo) #recognize-photo[hidden]{display:none}
 }
+
+.processing-label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+.processing-label select{font:inherit;min-height:48px;width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);padding:8px}
+#knowledge-body .processing-label input{margin:0 0 4px}

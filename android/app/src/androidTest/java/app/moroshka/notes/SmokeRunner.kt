@@ -365,6 +365,35 @@ class SmokeRunner : Instrumentation() {
         return "Photo-capture-storage-archive-ok"
     }
 
+    private fun processingFixture():String {
+        val prefs=ProcessingPrefs(targetContext)
+        check(ProcessingPrefs.operations.keys.all{prefs.mode(it)=="local"})
+        prefs.save(ProcessingPrefs.operations.keys.associateWith{if(it=="ocr")"server" else "off"})
+        check(ProcessingPrefs(targetContext).mode("ocr")=="server"&&prefs.mode("metadata")=="off")
+        val note=Note(java.util.UUID.randomUUID().toString(),"# Старое\n\nПроект сна. Сон и память.\n- [ ] Задача")
+        val proposal=LocalProcessing.metadata(note)
+        check(proposal.getString("category")=="task")
+        check(LocalProcessing.summary(note.text).contains("Сон"))
+        val unrelated=Note(java.util.UUID.randomUUID().toString(),"# Лес\n\nДеревья")
+        val ranked=LocalProcessing.rank("сон",listOf(unrelated,note)).getJSONArray("notes")
+        check(ranked.length()==1&&ranked.getJSONObject(0).getString("id")==note.id)
+        val engine=LocalOcr(targetContext)
+        check(engine.ready())
+        val bitmap=android.graphics.Bitmap.createBitmap(1200,300,android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.WHITE)
+        val canvas=android.graphics.Canvas(bitmap)
+        val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{
+            color=android.graphics.Color.BLACK;textSize=64f;typeface=android.graphics.Typeface.DEFAULT
+        }
+        canvas.drawText("HELLO WORLD",60f,110f,paint)
+        canvas.drawText("ПРИВЕТ МИР",60f,220f,paint)
+        val output=java.io.ByteArrayOutputStream()
+        check(bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG,95,output));bitmap.recycle()
+        val recognized=engine.recognize(output.toByteArray()).uppercase(java.util.Locale.ROOT)
+        check("HELLO" in recognized&&"ПРИВЕТ" in recognized){"OCR не распознал тестовый текст: "+recognized}
+        return "Local-processing-and-Cyrillic-OCR-ok"
+    }
+
     override fun onStart() {
         val result = runCatching {
             if (args.containsKey("installFixture")) return@runCatching installFixture()
@@ -375,6 +404,7 @@ class SmokeRunner : Instrumentation() {
             if (args.containsKey("incrementalFixture")) return@runCatching incrementalFixture()
             if (args.containsKey("knowledgeFixture")) return@runCatching knowledgeFixture()
             if (args.containsKey("photoFixture")) return@runCatching photoFixture()
+            if (args.containsKey("processingFixture")) return@runCatching processingFixture()
             if (args.containsKey("recoveryFixture")) return@runCatching recoveryFixture()
             val title = "Native " + java.util.UUID.randomUUID()
             val text = "# $title\n\n[[Лес]]\n- [ ] Исследовать"

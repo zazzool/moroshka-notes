@@ -1,5 +1,5 @@
-const cacheName = 'moroshka-shell-v14'
-const shell = ['/', '/app.js', '/backup.mjs', '/sync-pull.mjs', '/knowledge.mjs', '/markdown.mjs', '/media-format.mjs', '/media-store.mjs', '/style.css', '/icon.png',
+const cacheName = 'moroshka-shell-v15'
+const shell = ['/', '/app.js', '/backup.mjs', '/sync-pull.mjs', '/knowledge.mjs', '/markdown.mjs', '/media-format.mjs', '/media-store.mjs', '/processing.mjs', '/local-ocr.mjs', '/style.css', '/icon.png',
   '/assets/cloudberry.webp', '/assets/hero-day.webp', '/assets/hero-night.webp', '/assets/ideas.webp', '/assets/knowledge.webp', '/assets/search.webp', '/assets/balance.webp', '/assets/manrope.ttf', '/assets/manrope-OFL.txt', '/assets/note.svg', '/assets/checkbox.svg', '/assets/search.svg', '/assets/link.svg', '/assets/sparkles.svg', '/assets/folder.svg'
 ]
 self.addEventListener('install', event => {
@@ -13,7 +13,15 @@ self.addEventListener('activate', event => {
 })
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url)
-  if (event.request.method !== 'GET' || url.origin !== self.location.origin || !shell.includes(url.pathname)) return
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin) return
+  if (/^\/ocr-v1\/(?:tesseract\.min\.js|worker\.min\.js|tesseract-core-(?:simd-)?lstm\.wasm(?:\.js)?|(?:rus|eng)\.traineddata)$/.test(url.pathname)){
+    event.respondWith(caches.open('moroshka-ocr-v1').then(async cache=>{
+      const cached=await cache.match(url.pathname)
+      return cached||fetch(event.request)
+    }))
+    return
+  }
+  if(!shell.includes(url.pathname))return
   event.respondWith(fetch(event.request).catch(() => caches.open(cacheName).then(cache => cache.match(url.pathname))))
 })
 

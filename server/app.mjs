@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ApiError, openVault, titleOf, maxBytes } from './vault.mjs'
 import { intelligence } from './intelligence.mjs'
+import { openRouterConfig } from './openrouter-config.mjs'
 import { mcpResponse } from './mcp.mjs'
 import { openMedia } from './media.mjs'
 
@@ -13,6 +14,7 @@ const assets = new Map([
   ['/sync-pull.mjs', ['sync-pull.mjs', 'text/javascript']],
   ['/knowledge.mjs', ['knowledge.mjs', 'text/javascript']],
   ['/markdown.mjs', ['markdown.mjs', 'text/javascript']],
+  ['/processing.mjs',['processing.mjs','text/javascript']], ['/local-ocr.mjs',['local-ocr.mjs','text/javascript']],
   ['/media-format.mjs', ['media-format.mjs', 'text/javascript']],
   ['/media-store.mjs', ['media-store.mjs', 'text/javascript']],
   ['/style.css', ['style.css', 'text/css']], ['/icon.png', ['icon.png', 'image/png']], ['/sw.js', ['sw.js', 'text/javascript']],
@@ -58,7 +60,8 @@ export function application(options, request = fetch) {
   if (mcpToken && (mcpToken.length < 24 || mcpToken === token || mcpToken === actionsToken)) throw Error('Нужен отдельный MCP_TOKEN длиной от 24 символов')
   const vault = openVault(dir)
   const media = openMedia(dir)
-  const ai = intelligence({vault,dir,key:openrouterKey,model,embeddingModel,visionModel,media,request})
+  const configuration = openRouterConfig({dir,key:openrouterKey,model,embeddingModel,visionModel,request})
+  const ai = intelligence({vault,dir,configuration,media,request})
   // Pairing requests are short-lived and live only in this process.
   const pairing = new Map()
   function cleanPairing() {
@@ -98,6 +101,14 @@ export function application(options, request = fetch) {
     try {
       const { pathname, searchParams } = new URL(req.url, 'http://localhost')
       const get = req.method === 'GET'
+      if(get&&/^\/ocr-v1\/(?:tesseract\.min\.js|worker\.min\.js|tesseract-core-(?:simd-)?lstm\.wasm(?:\.js)?|(?:rus|eng)\.traineddata|(?:tesseract-js|tesseract-core|tessdata)-LICENSE\.txt)$/.test(pathname)){
+        let bytes
+        try{bytes=readFileSync(new URL('../web'+pathname,import.meta.url))}
+        catch(e){if(e.code==='ENOENT')throw new ApiError(404,'Локальный OCR не установлен');throw e}
+        if(pathname.endsWith('/worker.min.js'))res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'")
+        const type=pathname.endsWith('.js')?'text/javascript':pathname.endsWith('.wasm')?'application/wasm':pathname.endsWith('.txt')?'text/plain':'application/octet-stream'
+        res.writeHead(200,{'Content-Type':type});return res.end(bytes)
+      }
       if (get && assets.has(pathname)) {
         const [name, type] = assets.get(pathname)
         const file = readFileSync(new URL('../web/' + name, import.meta.url))
@@ -211,6 +222,17 @@ export function application(options, request = fetch) {
           const removed=vault.remove(id,base)
           ai.invalidate(id)
           return json(res, 200, removed)
+        }
+        if (pathname==='/api/ai/config') {
+          if(get)return json(res,200,configuration.status())
+          if(req.method==='PUT'){
+            if(!sameOrigin(req))throw new ApiError(403,'Origin отклонён')
+            return json(res,200,await ai.configure(await payload(req)))
+          }
+        }
+        if(req.method==='POST'&&pathname==='/api/ai/config/test'){
+          if(!sameOrigin(req))throw new ApiError(403,'Origin отклонён')
+          return json(res,200,await ai.testConnection())
         }
         if (get && pathname === '/api/ai/status') return json(res,200,ai.status())
         if (req.method === 'POST' && pathname === '/api/ai/analyze') return json(res,200,await ai.analyze(await payload(req)))
